@@ -1,0 +1,12 @@
+<Solution>
+	<Folder Name="/解决方案项/">
+		<File Path=".editorconfig" />
+		<File Path=".gitignore" />
+		<File Path="Directory.Build.props" />
+		<File Path="Directory.Packages.props" />
+		<File Path="README.md" />
+	</Folder>
+	<Project Path="samples/Eruru.JsonConfigSample/Eruru.JsonConfigSample.csproj" Id="866370cb-3f3b-4b99-b774-5adacedf1b17" />
+	<Project Path="src/Eruru.JsonConfig/Eruru.JsonConfig.csproj" />
+	<Project Path="tests/JsonConfigTests/JsonConfigTests.csproj" Id="9a97573b-6374-45c4-94c7-ab151ae706e4" />
+</Solution>
