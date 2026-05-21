@@ -48,18 +48,16 @@ namespace Eruru.JsonConfig {
 		}
 
 		protected virtual void Dispose (bool disposing) {
-			if (Interlocked.Exchange (ref State, 1) != 0) {
+			if (Interlocked.Exchange (ref State, 1) != 0 || !disposing) {
 				return;
 			}
-			if (disposing) {
-				SemaphoreSlim.Wait ();
-				try {
-					InternalDispose ();
-				} finally {
-					SemaphoreSlim.Release ();
-				}
-				SemaphoreSlim.Dispose ();
+			SemaphoreSlim.Wait ();
+			try {
+				InternalDispose ();
+			} finally {
+				SemaphoreSlim.Release ();
 			}
+			SemaphoreSlim.Dispose ();
 		}
 
 		public async ValueTask DisposeAsync () {
@@ -355,7 +353,7 @@ namespace Eruru.JsonConfig {
 			try {
 				await Task.Delay (AutoReloadDebouncerTime, cancellationTokenSource.Token).ConfigureAwait (false);
 			} catch (ObjectDisposedException) {
-
+				return;
 			} catch (OperationCanceledException) {
 				return;
 			}
