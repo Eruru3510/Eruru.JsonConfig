@@ -174,9 +174,10 @@ namespace JsonConfigTests {
 		}
 
 		static void JsonConfig_OnChanged (object? sender, JsonConfigOnChangedEventArgs<Config> e) {
-			if (sender is JsonConfig<Config, Context> jsonConfig && jsonConfig.Context != null) {
-				Interlocked.Increment (ref jsonConfig.Context.OnChangedCounter);
+			if (sender is not JsonConfig<Config, Context> jsonConfig || jsonConfig.Context == null) {
+				return;
 			}
+			Interlocked.Increment (ref jsonConfig.Context.OnChangedCounter);
 		}
 
 	}

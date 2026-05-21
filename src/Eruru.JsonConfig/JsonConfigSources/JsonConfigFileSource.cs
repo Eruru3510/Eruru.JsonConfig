@@ -24,15 +24,13 @@ namespace Eruru.JsonConfig {
 		}
 
 		protected virtual void Dispose (bool disposing) {
-			if (Interlocked.Exchange (ref State, 1) != 0) {
+			if (Interlocked.Exchange (ref State, 1) != 0 || !disposing) {
 				return;
 			}
-			if (disposing) {
-				OnChanged = null;
-				if (FileSystemWatcher != null) {
-					FileSystemWatcher.Changed -= FileSystemWatcher_Changed;
-					FileSystemWatcher.Dispose ();
-				}
+			OnChanged = null;
+			if (FileSystemWatcher != null) {
+				FileSystemWatcher.Changed -= FileSystemWatcher_Changed;
+				FileSystemWatcher.Dispose ();
 			}
 		}
 

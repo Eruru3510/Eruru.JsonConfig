@@ -14,12 +14,10 @@ namespace Eruru.JsonConfig {
 		}
 
 		protected virtual void Dispose (bool disposing) {
-			if (Interlocked.Exchange (ref State, 1) != 0) {
+			if (Interlocked.Exchange (ref State, 1) != 0 || !disposing) {
 				return;
 			}
-			if (disposing) {
-				OnChanged = null;
-			}
+			OnChanged = null;
 		}
 
 		public void Dispose () {
