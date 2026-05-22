@@ -39,6 +39,9 @@ namespace Eruru.JsonConfigSample {
 					// Serialization/deserialization implemented through System.Text.Json JsonTypeInfo
 					, jsonContext.Config
 				)
+				// 配置上下文
+				// Configuration context
+				.ConfigureContext (context)
 				// 方便链式调用时在 BuildAsync 之前进行一些配置
 				// Allows additional configuration before BuildAsync in fluent calls
 				.Configure (static jsonConfig => {
@@ -48,13 +51,12 @@ namespace Eruru.JsonConfigSample {
 				})
 				// 构建，此时才会首次加载，如果配置文件不存在则会自动生成
 				// Build the configuration. The first load occurs here, and the config file will be created automatically if it does not exist
-				.BuildAsync (context).ConfigureAwait (false);
+				.BuildAsync ().ConfigureAwait (false);
 			var id = 0;
 			// 读取内存中的配置数据
 			// Read configuration data from memory
 			await jsonConfig.TryReadAsync ((jsonConfig, value) => {
 				id = value.Id;
-				return Task.CompletedTask;
 			}).ConfigureAwait (false);
 			await Task.Delay (1000).ConfigureAwait (false);
 			// 修改内存中的配置数据，完成后会自动保存到文件
@@ -63,7 +65,6 @@ namespace Eruru.JsonConfigSample {
 #pragma warning disable CA5394 // 请勿使用不安全的随机性
 				value.Id = Random.Shared.Next ();
 #pragma warning restore CA5394 // 请勿使用不安全的随机性
-				return Task.CompletedTask;
 			}).ConfigureAwait (false);
 			await Console.In.ReadLineAsync ().ConfigureAwait (false);
 			File.Delete (path);

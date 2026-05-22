@@ -261,8 +261,23 @@ namespace Eruru.JsonConfig {
 			await func (this, value, state).ConfigureAwait (false);
 			return true;
 		}
+		public Task<bool> TryReadAsync<TState> (
+			Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state
+		) {
+			return TryReadAsync<(TState, Action<JsonConfig<TConfig, TContext>, TConfig, TState>)> (
+				static (jsonConfig, value, state) => {
+					state.Item2 (jsonConfig, value, state.Item1);
+				}, (state, func)
+			);
+		}
 		public Task<bool> TryReadAsync (Func<JsonConfig<TConfig, TContext>, TConfig, Task> func) {
 			return TryReadAsync (static (jsonConfig, value, state) => state (jsonConfig, value), func);
+		}
+		public Task<bool> TryReadAsync (Action<JsonConfig<TConfig, TContext>, TConfig> func) {
+			return TryReadAsync (static (jsonConfig, value, state) => {
+				state (jsonConfig, value);
+				return Task.CompletedTask;
+			}, func);
 		}
 
 		public async Task<bool> TryWriteAsync<TState> (
@@ -310,10 +325,29 @@ namespace Eruru.JsonConfig {
 				cancellationTokenSource?.Dispose ();
 			}
 		}
+		public Task<bool> TryWriteAsync<TState> (
+			Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state
+			, CancellationToken? cancellationToken = null
+		) {
+			return TryWriteAsync<(TState, Action<JsonConfig<TConfig, TContext>, TConfig, TState>)> (
+				static (jsonConfig, value, state) => {
+					state.Item2 (jsonConfig, value, state.Item1);
+					return Task.CompletedTask;
+				}, (state, func), cancellationToken
+			);
+		}
 		public Task<bool> TryWriteAsync (
 			Func<JsonConfig<TConfig, TContext>, TConfig, Task> func, CancellationToken? cancellationToken = null
 		) {
 			return TryWriteAsync (static (jsonConfig, value, state) => state (jsonConfig, value), func, cancellationToken);
+		}
+		public Task<bool> TryWriteAsync (
+			Action<JsonConfig<TConfig, TContext>, TConfig> func, CancellationToken? cancellationToken = null
+		) {
+			return TryWriteAsync (static (jsonConfig, value, state) => {
+				state (jsonConfig, value);
+				return Task.CompletedTask;
+			}, func, cancellationToken);
 		}
 
 		void CheckDisposed () {
