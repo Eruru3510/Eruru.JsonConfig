@@ -18,13 +18,14 @@ namespace JsonConfigTests {
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigFileSource)
+				.ConfigureSource (jsonConfigFileSource, true, TimeSpan.FromMilliseconds (100))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
 				})
 				.BuildAsync (TestContext.Current.CancellationToken);
 			try {
+				await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 				Assert.True (File.Exists (path));
 				Assert.Equal (1, context.OnChangedCounter);
 			} finally {
@@ -46,7 +47,7 @@ namespace JsonConfigTests {
 			}, jsonContext.Config), TestContext.Current.CancellationToken);
 			try {
 				await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-					.ConfigureSource (jsonConfigFileSource)
+					.ConfigureSource (jsonConfigFileSource, true, TimeSpan.FromMilliseconds (100))
 					.ConfigureContext (context)
 					.Configure (static jsonConfig => {
 						jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -55,6 +56,7 @@ namespace JsonConfigTests {
 				Assert.True (await jsonConfig.TryReadAsync (static (jsonConfig, value) => {
 					Assert.Equal (nameof (JsonConfig), value.Text);
 				}));
+				await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 				Assert.True (File.Exists (path));
 				Assert.Equal (1, context.OnChangedCounter);
 			} finally {
@@ -72,21 +74,22 @@ namespace JsonConfigTests {
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigFileSource, autoReloadDebouncerTime: TimeSpan.FromMilliseconds (500))
+				.ConfigureSource (jsonConfigFileSource, true, TimeSpan.FromMilliseconds (100))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
 				})
 				.BuildAsync (TestContext.Current.CancellationToken);
 			try {
+				await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 				Assert.True (await jsonConfig.TryWriteAsync (static (jsonConfig, value) => {
 					value.Text = nameof (JsonConfig);
-				}, TestContext.Current.CancellationToken));
+				}, false, TestContext.Current.CancellationToken));
 				Assert.True (await jsonConfig.TryReadAsync (static (jsonConfig, value) => {
 					Assert.Equal (nameof (JsonConfig), value.Text);
 				}));
+				await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 				Assert.True (File.Exists (path));
-				await Task.Delay (1000, TestContext.Current.CancellationToken);
 				Assert.Equal (3, context.OnChangedCounter);
 			} finally {
 				File.Delete (path);
@@ -102,18 +105,46 @@ namespace JsonConfigTests {
 			using var jsonConfigMemorySource = new JsonConfigMemorySource ();
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigMemorySource)
+				.ConfigureSource (jsonConfigMemorySource, true, TimeSpan.FromMilliseconds (100))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
 				})
 				.BuildAsync (TestContext.Current.CancellationToken);
+			await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 			Assert.True (await jsonConfig.TryWriteAsync (static (jsonConfig, value) => {
 				value.Text = nameof (JsonConfig);
-			}, TestContext.Current.CancellationToken));
+			}, false, TestContext.Current.CancellationToken));
 			Assert.True (await jsonConfig.TryReadAsync (static (jsonConfig, value) => {
 				Assert.Equal (nameof (JsonConfig), value.Text);
 			}));
+			await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
+			Assert.Equal (2, context.OnChangedCounter);
+			jsonConfig.OnChanged -= JsonConfig_OnChanged;
+		}
+
+		[Fact]
+		public async Task CancelAutoReload () {
+			var path = Path.GetRandomFileName ();
+			var context = new Context ();
+			var jsonContext = new JsonContext (new (JsonConfig.JsonSerializerOptions));
+			using var jsonConfigFileSource = new JsonConfigFileSource (path);
+			using var jsonConfig = new JsonConfig<Config, Context> ();
+			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
+				.ConfigureSource (jsonConfigFileSource, true, TimeSpan.FromMilliseconds (100))
+				.ConfigureContext (context)
+				.Configure (static jsonConfig => {
+					jsonConfig.OnChanged += JsonConfig_OnChanged;
+				})
+				.BuildAsync (TestContext.Current.CancellationToken);
+			await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
+			Assert.True (await jsonConfig.TryWriteAsync (static (jsonConfig, value) => {
+				value.Text = nameof (JsonConfig);
+			}, true, TestContext.Current.CancellationToken));
+			Assert.True (await jsonConfig.TryReadAsync (static (jsonConfig, value) => {
+				Assert.Equal (nameof (JsonConfig), value.Text);
+			}));
+			await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 			Assert.Equal (2, context.OnChangedCounter);
 			jsonConfig.OnChanged -= JsonConfig_OnChanged;
 		}
@@ -125,7 +156,7 @@ namespace JsonConfigTests {
 			using var jsonConfigMemorySource = new JsonConfigMemorySource ();
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigMemorySource)
+				.ConfigureSource (jsonConfigMemorySource, false, TimeSpan.FromMilliseconds (100))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -140,6 +171,7 @@ namespace JsonConfigTests {
 					while (Volatile.Read (ref writeCounter) + Volatile.Read (ref writeCounter1) < count) {
 						Interlocked.Increment (ref readCounter);
 						Assert.True (await jsonConfig.TryReadAsync (static (jsonConfig, value) => {
+
 						}).ConfigureAwait (false));
 					}
 				}, TestContext.Current.CancellationToken)
@@ -148,7 +180,7 @@ namespace JsonConfigTests {
 						Interlocked.Increment (ref writeCounter);
 						Assert.True (await jsonConfig.TryWriteAsync (static (jsonConfig, value) => {
 							value.Counter++;
-						}, TestContext.Current.CancellationToken).ConfigureAwait (false));
+						}, true, TestContext.Current.CancellationToken).ConfigureAwait (false));
 						await Task.Delay (TimeSpan.FromMilliseconds (1)).ConfigureAwait (false);
 					}
 				}, TestContext.Current.CancellationToken)
@@ -157,7 +189,7 @@ namespace JsonConfigTests {
 						Interlocked.Increment (ref writeCounter1);
 						Assert.True (await jsonConfig.TryWriteAsync (static (jsonConfig, value) => {
 							value.Counter--;
-						}, TestContext.Current.CancellationToken).ConfigureAwait (false));
+						}, true, TestContext.Current.CancellationToken).ConfigureAwait (false));
 						await Task.Delay (TimeSpan.FromMilliseconds (1)).ConfigureAwait (false);
 					}
 				}, TestContext.Current.CancellationToken)
@@ -166,6 +198,7 @@ namespace JsonConfigTests {
 			Assert.True (await jsonConfig.TryReadAsync (static (jsonConfig, value) => {
 				Assert.Equal (0, value.Counter);
 			}));
+			await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 			jsonConfig.OnChanged -= JsonConfig_OnChanged;
 		}
 
