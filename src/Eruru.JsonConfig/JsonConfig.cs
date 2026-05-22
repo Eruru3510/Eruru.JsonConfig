@@ -96,6 +96,11 @@ namespace Eruru.JsonConfig {
 			return this;
 		}
 
+		public JsonConfig<TConfig, TContext> ConfigureContext (TContext context) {
+			Context = context;
+			return this;
+		}
+
 		public JsonConfig<TConfig, TContext> Configure<TState> (
 			Action<JsonConfig<TConfig, TContext>, TState> action, TState state, TimeSpan? timeout = null
 		) {
@@ -116,9 +121,7 @@ namespace Eruru.JsonConfig {
 			return Configure (static (jsonConfig, state) => state (jsonConfig), action, operationTimeout);
 		}
 
-		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (
-			TContext? context = default, CancellationToken? cancellationToken = null
-		) {
+		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken? cancellationToken = null) {
 			if (OnCreate == null || JsonTypeInfo == null) {
 				throw new ArgumentException ($"Need to {nameof (ConfigureValue)} first");
 			}
@@ -128,7 +131,6 @@ namespace Eruru.JsonConfig {
 			if (Interlocked.Exchange (ref BuildState, 1) != 0) {
 				return this;
 			}
-			Context = context;
 			CancellationTokenSource? cancellationTokenSource = null;
 			try {
 				if (cancellationToken == null) {
