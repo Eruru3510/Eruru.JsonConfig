@@ -44,6 +44,14 @@ namespace Eruru.JsonConfig {
 			return Task.CompletedTask;
 		}
 
+		public Task BackupAsync () {
+			return Task.CompletedTask;
+		}
+
+		public Task DeleteAsync () {
+			return Task.CompletedTask;
+		}
+
 		void CheckDisposed () {
 			if (Volatile.Read (ref State) == 0) {
 				return;

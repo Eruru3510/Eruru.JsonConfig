@@ -227,6 +227,7 @@ namespace Eruru.JsonConfig {
 			}
 		}
 		async Task<bool> TrySaveAsync (TConfig? value, bool cancelAutoReload) {
+			var isSuccess = false;
 			var outputStream = JsonConfigSource == null ? null
 				: await JsonConfigSource.OpenOutputStreamAsync ().ConfigureAwait (false);
 			try {
@@ -234,10 +235,14 @@ namespace Eruru.JsonConfig {
 					return false;
 				}
 				await JsonSerializer.SerializeAsync (outputStream, value, JsonTypeInfo!).ConfigureAwait (false);
+				isSuccess = true;
 				return true;
 			} finally {
 				if (JsonConfigSource != null) {
 					await JsonConfigSource.CloseOutputStreamAsync (outputStream).ConfigureAwait (false);
+					if (isSuccess) {
+						await JsonConfigSource.BackupAsync ().ConfigureAwait (false);
+					}
 				}
 				if (cancelAutoReload && IsAutoReloadWhenSourceChanged && outputStream != null) {
 					_ = CancelAutoReloadDebouncerAsync ().ContinueWith (static _ => {

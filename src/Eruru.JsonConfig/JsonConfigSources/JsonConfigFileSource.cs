@@ -7,15 +7,17 @@ namespace Eruru.JsonConfig {
 		public event EventHandler? OnChanged;
 
 		readonly string Path;
+		readonly string BackupPath;
 		readonly FileSystemWatcher? FileSystemWatcher;
 		int State;
 
 		public JsonConfigFileSource (string path) {
 			var fileInfo = new FileInfo (path);
-			Path = fileInfo.FullName;
 			if (fileInfo.DirectoryName == null) {
-				return;
+				throw new DirectoryNotFoundException ();
 			}
+			Path = fileInfo.FullName;
+			BackupPath = $"{Path}.bak";
 			FileSystemWatcher = new (fileInfo.DirectoryName, $"*{fileInfo.Extension}") {
 				NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
 			};
@@ -75,6 +77,17 @@ namespace Eruru.JsonConfig {
 			stream.Dispose ();
 			return Task.CompletedTask;
 #endif
+		}
+
+		public Task BackupAsync () {
+			File.Copy (Path, BackupPath, true);
+			return Task.CompletedTask;
+		}
+
+		public Task DeleteAsync () {
+			File.Delete (Path);
+			File.Delete (BackupPath);
+			return Task.CompletedTask;
 		}
 
 		void CheckDisposed () {

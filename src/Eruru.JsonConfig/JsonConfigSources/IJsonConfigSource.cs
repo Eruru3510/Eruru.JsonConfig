@@ -14,6 +14,10 @@ namespace Eruru.JsonConfig {
 
 		Task CloseOutputStreamAsync (Stream? stream);
 
+		Task BackupAsync ();
+
+		Task DeleteAsync ();
+
 	}
 
 }

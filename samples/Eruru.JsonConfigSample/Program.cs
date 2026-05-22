@@ -7,11 +7,15 @@ namespace Eruru.JsonConfigSample {
 	internal sealed class Program {
 
 		static async Task Main () {
+			using var cancellationTokenSource = new CancellationTokenSource ();
+			Console.CancelKeyPress += (sender, e) => {
+				e.Cancel = true;
+				cancellationTokenSource.Cancel ();
+			};
 			// 可自定义 JsonSerializerOptions
 			// Customizable JsonSerializerOptions
 			var jsonContext = new JsonContext (JsonConfig.JsonConfig.JsonSerializerOptions);
-			var path = "Config.json";
-			using var jsonConfigFileSource = new JsonConfigFileSource (path);
+			using var jsonConfigFileSource = new JsonConfigFileSource ("Config.json");
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			var context = new Context (jsonContext);
 			// 配置来源
@@ -66,8 +70,8 @@ namespace Eruru.JsonConfigSample {
 				value.Id = Random.Shared.Next ();
 #pragma warning restore CA5394 // 请勿使用不安全的随机性
 			}).ConfigureAwait (false);
-			await Console.In.ReadLineAsync ().ConfigureAwait (false);
-			File.Delete (path);
+			await Console.In.ReadLineAsync (cancellationTokenSource.Token).ConfigureAwait (false);
+			await jsonConfigFileSource.DeleteAsync ().ConfigureAwait (false);
 			jsonConfig.OnChanged -= JsonConfig_OnChanged;
 		}
 
