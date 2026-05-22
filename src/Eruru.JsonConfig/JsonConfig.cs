@@ -79,7 +79,7 @@ namespace Eruru.JsonConfig {
 			GC.SuppressFinalize (this);
 		}
 
-		public JsonConfig<TConfig, TContext> ConfigurationValue (
+		public JsonConfig<TConfig, TContext> ConfigureValue (
 			Func<JsonConfig<TConfig, TContext>, TConfig> onCreate, JsonTypeInfo<TConfig> jsonTypeInfo
 		) {
 			OnCreate = onCreate;
@@ -87,7 +87,7 @@ namespace Eruru.JsonConfig {
 			return this;
 		}
 
-		public JsonConfig<TConfig, TContext> ConfigurationSource (
+		public JsonConfig<TConfig, TContext> ConfigureSource (
 			IJsonConfigSource jsonConfigSource, bool isAutoReloadWhenSourceChanged = true, TimeSpan? autoReloadDebouncerTime = null
 		) {
 			JsonConfigSource = jsonConfigSource;
@@ -96,7 +96,7 @@ namespace Eruru.JsonConfig {
 			return this;
 		}
 
-		public JsonConfig<TConfig, TContext> Configuration<TState> (
+		public JsonConfig<TConfig, TContext> Configure<TState> (
 			Action<JsonConfig<TConfig, TContext>, TState> action, TState state, TimeSpan? timeout = null
 		) {
 #if NET
@@ -110,20 +110,20 @@ namespace Eruru.JsonConfig {
 			action (this, state);
 			return this;
 		}
-		public JsonConfig<TConfig, TContext> Configuration (
+		public JsonConfig<TConfig, TContext> Configure (
 			Action<JsonConfig<TConfig, TContext>> action, TimeSpan? operationTimeout = null
 		) {
-			return Configuration (static (jsonConfig, state) => state (jsonConfig), action, operationTimeout);
+			return Configure (static (jsonConfig, state) => state (jsonConfig), action, operationTimeout);
 		}
 
 		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (
 			TContext? context = default, CancellationToken? cancellationToken = null
 		) {
 			if (OnCreate == null || JsonTypeInfo == null) {
-				throw new ArgumentException ($"Need to {nameof (ConfigurationValue)} first");
+				throw new ArgumentException ($"Need to {nameof (ConfigureValue)} first");
 			}
 			if (JsonConfigSource == null) {
-				throw new ArgumentException ($"Need to {nameof (ConfigurationSource)} first");
+				throw new ArgumentException ($"Need to {nameof (ConfigureSource)} first");
 			}
 			if (Interlocked.Exchange (ref BuildState, 1) != 0) {
 				return this;

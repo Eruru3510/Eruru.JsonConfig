@@ -16,7 +16,7 @@ namespace Eruru.JsonConfigSample {
 			var context = new Context (jsonContext);
 			// 配置来源
 			// Configuration source
-			await jsonConfig.ConfigurationSource (
+			await jsonConfig.ConfigureSource (
 				jsonConfigFileSource
 				// 配置文件被外部变更后自动重新加载到内存
 				// Automatically reload configuration into memory when the file changes externally
@@ -27,7 +27,7 @@ namespace Eruru.JsonConfigSample {
 			)
 				// 配置值
 				// Configuration value
-				.ConfigurationValue (
+				.ConfigureValue (
 					// 配置文件不存在时需要创建配置类实例来使用
 					// Create a default configuration instance when the config file does not exist
 					static jsonConfig => new Config () {
@@ -41,7 +41,7 @@ namespace Eruru.JsonConfigSample {
 				)
 				// 方便链式调用时在 BuildAsync 之前进行一些配置
 				// Allows additional configuration before BuildAsync in fluent calls
-				.Configuration (static jsonConfig => {
+				.Configure (static jsonConfig => {
 					// 注册改变事件用于检查新旧数据是否有变化，手动更新其他系统的配置等
 					// Register change event to compare old/new values or manually update other systems
 					jsonConfig.OnChanged += JsonConfig_OnChanged;

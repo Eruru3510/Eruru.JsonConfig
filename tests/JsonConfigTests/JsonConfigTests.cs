@@ -17,9 +17,9 @@ namespace JsonConfigTests {
 			var jsonContext = new JsonContext (new (JsonConfig.JsonSerializerOptions));
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
-			await jsonConfig.ConfigurationValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigurationSource (jsonConfigFileSource)
-				.Configuration (static jsonConfig => {
+			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
+				.ConfigureSource (jsonConfigFileSource)
+				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
 				})
 				.BuildAsync (context, TestContext.Current.CancellationToken);
@@ -44,9 +44,9 @@ namespace JsonConfigTests {
 				Text = nameof (JsonConfig)
 			}, jsonContext.Config), TestContext.Current.CancellationToken);
 			try {
-				await jsonConfig.ConfigurationValue (static jsonConfig => new Config (), jsonContext.Config)
-					.ConfigurationSource (jsonConfigFileSource)
-					.Configuration (static jsonConfig => {
+				await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
+					.ConfigureSource (jsonConfigFileSource)
+					.Configure (static jsonConfig => {
 						jsonConfig.OnChanged += JsonConfig_OnChanged;
 					})
 					.BuildAsync (context, TestContext.Current.CancellationToken);
@@ -70,9 +70,9 @@ namespace JsonConfigTests {
 			var jsonContext = new JsonContext (new (JsonConfig.JsonSerializerOptions));
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
-			await jsonConfig.ConfigurationValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigurationSource (jsonConfigFileSource, autoReloadDebouncerTime: TimeSpan.FromMilliseconds (500))
-				.Configuration (static jsonConfig => {
+			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
+				.ConfigureSource (jsonConfigFileSource, autoReloadDebouncerTime: TimeSpan.FromMilliseconds (500))
+				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
 				})
 				.BuildAsync (context, TestContext.Current.CancellationToken);
@@ -101,9 +101,9 @@ namespace JsonConfigTests {
 			var jsonContext = new JsonContext (new (JsonConfig.JsonSerializerOptions));
 			using var jsonConfigMemorySource = new JsonConfigMemorySource ();
 			using var jsonConfig = new JsonConfig<Config, Context> ();
-			await jsonConfig.ConfigurationValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigurationSource (jsonConfigMemorySource)
-				.Configuration (static jsonConfig => {
+			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
+				.ConfigureSource (jsonConfigMemorySource)
+				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
 				})
 				.BuildAsync (context, TestContext.Current.CancellationToken);
@@ -125,9 +125,9 @@ namespace JsonConfigTests {
 			var jsonContext = new JsonContext (new (JsonConfig.JsonSerializerOptions));
 			using var jsonConfigMemorySource = new JsonConfigMemorySource ();
 			using var jsonConfig = new JsonConfig<Config, Context> ();
-			await jsonConfig.ConfigurationValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigurationSource (jsonConfigMemorySource)
-				.Configuration (static jsonConfig => {
+			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
+				.ConfigureSource (jsonConfigMemorySource)
+				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
 				})
 				.BuildAsync (context, TestContext.Current.CancellationToken);
