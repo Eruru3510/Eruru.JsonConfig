@@ -18,7 +18,7 @@ namespace JsonConfigTests {
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigFileSource, true, TimeSpan.FromMilliseconds (100))
+				.ConfigureSource (jsonConfigFileSource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (50))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -47,7 +47,7 @@ namespace JsonConfigTests {
 			}, jsonContext.Config), TestContext.Current.CancellationToken);
 			try {
 				await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-					.ConfigureSource (jsonConfigFileSource, true, TimeSpan.FromMilliseconds (100))
+					.ConfigureSource (jsonConfigFileSource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (50))
 					.ConfigureContext (context)
 					.Configure (static jsonConfig => {
 						jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -74,7 +74,7 @@ namespace JsonConfigTests {
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigFileSource, true, TimeSpan.FromMilliseconds (100))
+				.ConfigureSource (jsonConfigFileSource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (50))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -105,7 +105,7 @@ namespace JsonConfigTests {
 			using var jsonConfigMemorySource = new JsonConfigMemorySource ();
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigMemorySource, true, TimeSpan.FromMilliseconds (100))
+				.ConfigureSource (jsonConfigMemorySource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (100))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -131,7 +131,7 @@ namespace JsonConfigTests {
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigFileSource, true, TimeSpan.FromMilliseconds (100))
+				.ConfigureSource (jsonConfigFileSource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (50))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -156,7 +156,7 @@ namespace JsonConfigTests {
 			using var jsonConfigMemorySource = new JsonConfigMemorySource ();
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigMemorySource, false, TimeSpan.FromMilliseconds (100))
+				.ConfigureSource (jsonConfigMemorySource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (100))
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
