@@ -265,13 +265,13 @@ namespace Eruru.JsonConfig {
 		}
 
 		public async Task<bool> TryReadAsync<TState> (
-			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> func, TState state
+			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state
 		) {
 #if NET
-			ArgumentNullException.ThrowIfNull (func, nameof (func));
+			ArgumentNullException.ThrowIfNull (callbackAsync, nameof (callbackAsync));
 #else
-			if (func == null) {
-				throw new ArgumentNullException (nameof (func));
+			if (callbackAsync == null) {
+				throw new ArgumentNullException (nameof (callbackAsync));
 			}
 #endif
 			CheckDisposed ();
@@ -280,7 +280,7 @@ namespace Eruru.JsonConfig {
 			if (value == null) {
 				return false;
 			}
-			await func (this, value, state).ConfigureAwait (false);
+			await callbackAsync (this, value, state).ConfigureAwait (false);
 			return true;
 		}
 		public Task<bool> TryReadAsync<TState> (Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state) {
@@ -291,14 +291,14 @@ namespace Eruru.JsonConfig {
 				}, (state, func)
 			);
 		}
-		public Task<bool> TryReadAsync (Func<JsonConfig<TConfig, TContext>, TConfig, Task> func) {
-			return TryReadAsync (static (jsonConfig, value, state) => state (jsonConfig, value), func);
+		public Task<bool> TryReadAsync (Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync) {
+			return TryReadAsync (static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync);
 		}
-		public Task<bool> TryReadAsync (Action<JsonConfig<TConfig, TContext>, TConfig> func) {
+		public Task<bool> TryReadAsync (Action<JsonConfig<TConfig, TContext>, TConfig> callbackAsync) {
 			return TryReadAsync (static (jsonConfig, value, state) => {
 				state (jsonConfig, value);
 				return Task.CompletedTask;
-			}, func);
+			}, callbackAsync);
 		}
 
 		public bool TryRead<TState> (Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state) {
@@ -339,14 +339,14 @@ namespace Eruru.JsonConfig {
 		}
 
 		public async Task<bool> TryWriteAsync<TState> (
-			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> func, TState state, bool cancelAutoReload = true
-			, CancellationToken? cancellationToken = null
+			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state
+			, bool cancelAutoReload = true, CancellationToken? cancellationToken = null
 		) {
 #if NET
-			ArgumentNullException.ThrowIfNull (func, nameof (func));
+			ArgumentNullException.ThrowIfNull (callbackAsync, nameof (callbackAsync));
 #else
-			if (func == null) {
-				throw new ArgumentNullException (nameof (func));
+			if (callbackAsync == null) {
+				throw new ArgumentNullException (nameof (callbackAsync));
 			}
 #endif
 			CheckDisposed ();
@@ -369,10 +369,10 @@ namespace Eruru.JsonConfig {
 					if (value == null) {
 						return false;
 					}
-					await func (this, value, state).ConfigureAwait (false);
+					await callbackAsync (this, value, state).ConfigureAwait (false);
 					_ = SaveDebouncerAsync (
 						new (value, Interlocked.Exchange (ref Value, value), false), cancelAutoReload, token
-					).ContinueWith (task => {
+					).ContinueWith (static task => {
 						// TODO: handle exception
 					}, CancellationToken.None, TaskContinuationOptions.RunContinuationsAsynchronously, TaskScheduler.Default);
 					return true;
@@ -395,11 +395,12 @@ namespace Eruru.JsonConfig {
 			);
 		}
 		public Task<bool> TryWriteAsync (
-			Func<JsonConfig<TConfig, TContext>, TConfig, Task> func, bool cancelAutoReload = true,
+			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, bool cancelAutoReload = true,
 			CancellationToken? cancellationToken = null
 		) {
 			return TryWriteAsync (
-				static (jsonConfig, value, state) => state (jsonConfig, value), func, cancelAutoReload, cancellationToken
+				static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync,
+				cancelAutoReload, cancellationToken
 			);
 		}
 		public Task<bool> TryWriteAsync (
@@ -436,7 +437,8 @@ namespace Eruru.JsonConfig {
 		}
 
 		async Task SaveDebouncerAsync (
-			JsonConfigOnChangedEventArgs<TConfig> jsonConfigOnChangedEventArgs, bool cancelAutoReload, CancellationToken cancellationToken
+			JsonConfigOnChangedEventArgs<TConfig> jsonConfigOnChangedEventArgs, bool cancelAutoReload,
+			CancellationToken cancellationToken
 		) {
 			if (SaveDebouncerTime > TimeSpan.Zero) {
 				var cancellationTokenSource = new CancellationTokenSource ();

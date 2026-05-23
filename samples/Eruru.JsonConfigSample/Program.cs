@@ -56,16 +56,13 @@ namespace Eruru.JsonConfigSample {
 				// 构建，此时才会首次加载，如果配置文件不存在则会自动生成
 				// Build the configuration. The first load occurs here, and the config file will be created automatically if it does not exist
 				.BuildAsync ().ConfigureAwait (false);
-			var id = 0;
 			// 读取内存中的配置数据
 			// Read configuration data from memory
-			await jsonConfig.TryReadAsync ((jsonConfig, value) => {
-				id = value.Id;
-			}).ConfigureAwait (false);
+			var id = jsonConfig.Read (static (jsonConfig, value) => value?.Id);
 			await Task.Delay (TimeSpan.FromMilliseconds (2000)).ConfigureAwait (false);
 			// 修改内存中的配置数据，完成后会自动保存到文件
 			// Modify configuration data in memory and automatically save it to the file afterward
-			await jsonConfig.TryWriteAsync ((jsonConfig, value) => {
+			await jsonConfig.TryWriteAsync (static (jsonConfig, value) => {
 #pragma warning disable CA5394 // 请勿使用不安全的随机性
 				value.Id = Random.Shared.Next ();
 #pragma warning restore CA5394 // 请勿使用不安全的随机性

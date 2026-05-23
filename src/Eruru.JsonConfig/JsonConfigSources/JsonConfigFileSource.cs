@@ -30,10 +30,11 @@ namespace Eruru.JsonConfig {
 				return;
 			}
 			OnChanged = null;
-			if (FileSystemWatcher != null) {
-				FileSystemWatcher.Changed -= FileSystemWatcher_Changed;
-				FileSystemWatcher.Dispose ();
+			if (FileSystemWatcher == null) {
+				return;
 			}
+			FileSystemWatcher.Changed -= FileSystemWatcher_Changed;
+			FileSystemWatcher.Dispose ();
 		}
 
 		public void Dispose () {
