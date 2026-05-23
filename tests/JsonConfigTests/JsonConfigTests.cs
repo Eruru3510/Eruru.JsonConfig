@@ -18,7 +18,14 @@ namespace JsonConfigTests {
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigFileSource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (50))
+				.ConfigureSource (
+					jsonConfigFileSource, TimeSpan.FromMilliseconds (50), static jsonConfig => {
+						if (jsonConfig.Context is not Context context) {
+							return;
+						}
+						Interlocked.Increment (ref context.OnSavedCounter);
+					}, true, TimeSpan.FromMilliseconds (50)
+				)
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -28,6 +35,7 @@ namespace JsonConfigTests {
 				await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 				Assert.True (File.Exists (path));
 				Assert.Equal (1, context.OnChangedCounter);
+				Assert.Equal (1, context.OnSavedCounter);
 			} finally {
 				await jsonConfigFileSource.DeleteAsync ();
 				Assert.False (File.Exists (path));
@@ -47,7 +55,14 @@ namespace JsonConfigTests {
 			}, jsonContext.Config), TestContext.Current.CancellationToken);
 			try {
 				await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-					.ConfigureSource (jsonConfigFileSource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (50))
+					.ConfigureSource (
+						jsonConfigFileSource, TimeSpan.FromMilliseconds (50), static jsonConfig => {
+							if (jsonConfig.Context is not Context context) {
+								return;
+							}
+							Interlocked.Increment (ref context.OnSavedCounter);
+						}, true, TimeSpan.FromMilliseconds (50)
+					)
 					.ConfigureContext (context)
 					.Configure (static jsonConfig => {
 						jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -59,6 +74,7 @@ namespace JsonConfigTests {
 				await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 				Assert.True (File.Exists (path));
 				Assert.Equal (1, context.OnChangedCounter);
+				Assert.Equal (0, context.OnSavedCounter);
 			} finally {
 				await jsonConfigFileSource.DeleteAsync ();
 				Assert.False (File.Exists (path));
@@ -74,7 +90,14 @@ namespace JsonConfigTests {
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigFileSource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (50))
+				.ConfigureSource (
+					jsonConfigFileSource, TimeSpan.FromMilliseconds (50), static jsonConfig => {
+						if (jsonConfig.Context is not Context context) {
+							return;
+						}
+						Interlocked.Increment (ref context.OnSavedCounter);
+					}, true, TimeSpan.FromMilliseconds (50)
+				)
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -91,6 +114,7 @@ namespace JsonConfigTests {
 				await Task.Delay (TimeSpan.FromMilliseconds (200), TestContext.Current.CancellationToken);
 				Assert.True (File.Exists (path));
 				Assert.Equal (3, context.OnChangedCounter);
+				Assert.Equal (2, context.OnSavedCounter);
 			} finally {
 				await jsonConfigFileSource.DeleteAsync ();
 				Assert.False (File.Exists (path));
@@ -105,7 +129,9 @@ namespace JsonConfigTests {
 			using var jsonConfigMemorySource = new JsonConfigMemorySource ();
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigMemorySource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (100))
+				.ConfigureSource (
+					jsonConfigMemorySource, TimeSpan.FromMilliseconds (50), null, true, TimeSpan.FromMilliseconds (100)
+				)
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -131,7 +157,9 @@ namespace JsonConfigTests {
 			using var jsonConfigFileSource = new JsonConfigFileSource (path);
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigFileSource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (50))
+				.ConfigureSource (
+					jsonConfigFileSource, TimeSpan.FromMilliseconds (50), null, true, TimeSpan.FromMilliseconds (50)
+				)
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -156,7 +184,9 @@ namespace JsonConfigTests {
 			using var jsonConfigMemorySource = new JsonConfigMemorySource ();
 			using var jsonConfig = new JsonConfig<Config, Context> ();
 			await jsonConfig.ConfigureValue (static jsonConfig => new Config (), jsonContext.Config)
-				.ConfigureSource (jsonConfigMemorySource, TimeSpan.FromMilliseconds (50), true, TimeSpan.FromMilliseconds (100))
+				.ConfigureSource (
+					jsonConfigMemorySource, TimeSpan.FromMilliseconds (50), null, true, TimeSpan.FromMilliseconds (100)
+				)
 				.ConfigureContext (context)
 				.Configure (static jsonConfig => {
 					jsonConfig.OnChanged += JsonConfig_OnChanged;
@@ -214,6 +244,7 @@ namespace JsonConfigTests {
 	internal sealed class Context {
 
 		public int OnChangedCounter;
+		public int OnSavedCounter;
 
 	}
 
