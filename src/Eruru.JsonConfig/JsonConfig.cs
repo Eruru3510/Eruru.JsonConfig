@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
@@ -25,6 +24,7 @@ namespace Eruru.JsonConfig {
 #pragma warning restore CA1724 // 类型名与命名空间名称整体或部分冲突
 
 		public event EventHandler<JsonConfigOnChangedEventArgs<TConfig>>? OnChanged;
+		public Action<JsonConfig<TConfig, TContext>>? OnSaved { get; private set; }
 		public TContext? Context { get; private set; }
 
 		bool IsAutoReloadWhenSourceChanged;
@@ -94,11 +94,13 @@ namespace Eruru.JsonConfig {
 		}
 
 		public JsonConfig<TConfig, TContext> ConfigureSource (
-			IJsonConfigSource jsonConfigSource, TimeSpan? saveDebouncerTime = null,
+			IJsonConfigSource jsonConfigSource,
+			TimeSpan? saveDebouncerTime = null, Action<JsonConfig<TConfig, TContext>>? onSaved = null,
 			bool isAutoReloadWhenSourceChanged = true, TimeSpan? autoReloadDebouncerTime = null
 		) {
 			JsonConfigSource = jsonConfigSource;
 			SaveDebouncerTime = saveDebouncerTime.GetValueOrDefault (SaveDebouncerTime);
+			OnSaved = onSaved;
 			IsAutoReloadWhenSourceChanged = isAutoReloadWhenSourceChanged;
 			AutoReloadDebouncerTime = autoReloadDebouncerTime.GetValueOrDefault (AutoReloadDebouncerTime);
 			return this;
@@ -124,9 +126,9 @@ namespace Eruru.JsonConfig {
 			return this;
 		}
 		public JsonConfig<TConfig, TContext> Configure (
-			Action<JsonConfig<TConfig, TContext>> action, TimeSpan? operationTimeout = null
+			Action<JsonConfig<TConfig, TContext>> action, TimeSpan? timeout = null
 		) {
-			return Configure (static (jsonConfig, state) => state (jsonConfig), action, operationTimeout);
+			return Configure (static (jsonConfig, state) => state (jsonConfig), action, timeout);
 		}
 
 		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken? cancellationToken = null) {
@@ -148,7 +150,6 @@ namespace Eruru.JsonConfig {
 				if (!await TryLoadAsync (cancellationToken).ConfigureAwait (false)) {
 					throw new FileLoadException ("Load json file failed");
 				}
-				await TrySaveAsync (true, cancellationToken).ConfigureAwait (false);
 				JsonConfigSource.OnChanged += JsonConfigSource_OnChanged;
 				return this;
 			} finally {
@@ -172,6 +173,7 @@ namespace Eruru.JsonConfig {
 					token = cancellationToken.Value;
 				}
 				JsonConfigOnChangedEventArgs<TConfig>? jsonConfigOnChangedEventArgs = null;
+				var isSaved = false;
 				await SemaphoreSlim.WaitAsync (token).ConfigureAwait (false);
 				try {
 					CheckDisposed ();
@@ -182,6 +184,7 @@ namespace Eruru.JsonConfig {
 						if (inputStream == null) {
 							value = Value;
 							if (value != null) {
+								isSaved = await TrySaveAsync (value, true).ConfigureAwait (false);
 								return true;
 							}
 							value = OnCreate?.Invoke (this);
@@ -189,6 +192,7 @@ namespace Eruru.JsonConfig {
 								return false;
 							}
 							jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), isAutoReload);
+							isSaved = await TrySaveAsync (value, true).ConfigureAwait (false);
 							return true;
 						}
 						value = await JsonSerializer.DeserializeAsync (inputStream, JsonTypeInfo!).ConfigureAwait (false);
@@ -208,6 +212,9 @@ namespace Eruru.JsonConfig {
 					if (jsonConfigOnChangedEventArgs != null) {
 						OnChanged?.Invoke (this, jsonConfigOnChangedEventArgs);
 					}
+					if (isSaved) {
+						OnSaved?.Invoke (this);
+					}
 				}
 			} finally {
 				cancellationTokenSource?.Dispose ();
@@ -226,12 +233,17 @@ namespace Eruru.JsonConfig {
 				} else {
 					token = cancellationToken.Value;
 				}
+				var isSaved = false;
 				await SemaphoreSlim.WaitAsync (token).ConfigureAwait (false);
 				try {
 					CheckDisposed ();
-					return await TrySaveAsync (Value, cancelAutoReload).ConfigureAwait (false);
+					isSaved = await TrySaveAsync (Value, cancelAutoReload).ConfigureAwait (false);
+					return isSaved;
 				} finally {
 					SemaphoreSlim.Release ();
+					if (isSaved) {
+						OnSaved?.Invoke (this);
+					}
 				}
 			} finally {
 				cancellationTokenSource?.Dispose ();
@@ -245,7 +257,6 @@ namespace Eruru.JsonConfig {
 				if (outputStream == null || value == null) {
 					return false;
 				}
-				Debug.WriteLine ("序列化");
 				await JsonSerializer.SerializeAsync (outputStream, value, JsonTypeInfo!).ConfigureAwait (false);
 				isSuccess = true;
 				return true;
@@ -456,12 +467,16 @@ namespace Eruru.JsonConfig {
 					return;
 				}
 			}
+			var isSaved = false;
 			await SemaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 			try {
 				CheckDisposed ();
-				await TrySaveAsync (jsonConfigOnChangedEventArgs.Value, cancelAutoReload).ConfigureAwait (false);
+				isSaved = await TrySaveAsync (jsonConfigOnChangedEventArgs.Value, cancelAutoReload).ConfigureAwait (false);
 			} finally {
 				SemaphoreSlim.Release ();
+				if (isSaved) {
+					OnSaved?.Invoke (this);
+				}
 			}
 			OnChanged?.Invoke (this, jsonConfigOnChangedEventArgs);
 		}
