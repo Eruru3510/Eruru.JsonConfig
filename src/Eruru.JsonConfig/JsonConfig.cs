@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
@@ -32,11 +33,14 @@ namespace Eruru.JsonConfig {
 		IJsonConfigSource? JsonConfigSource;
 		TConfig? Value;
 		TimeSpan Timeout = TimeSpan.FromSeconds (60);
-		TimeSpan AutoReloadDebouncerTime = TimeSpan.FromMilliseconds (1000);
+		TimeSpan SaveDebouncerTime = TimeSpan.FromMilliseconds (500);
+		TimeSpan AutoReloadDebouncerTime = TimeSpan.FromMilliseconds (500);
 		readonly SemaphoreSlim SemaphoreSlim = new (1, 1);
 		int State;
 		int BuildState;
 		CancellationTokenSource? AutoReloadDebouncerCancellationTokenSource;
+		CancellationTokenSource? CancelAutoReloadDebouncerCancellationTokenSource;
+		CancellationTokenSource? SaveDebouncerCancellationTokenSource;
 
 		void InternalDispose () {
 			OnChanged = null;
@@ -45,6 +49,8 @@ namespace Eruru.JsonConfig {
 				JsonConfigSource.Dispose ();
 			}
 			AutoReloadDebouncerCancellationTokenSource?.Dispose ();
+			CancelAutoReloadDebouncerCancellationTokenSource?.Dispose ();
+			SaveDebouncerCancellationTokenSource?.Dispose ();
 		}
 
 		protected virtual void Dispose (bool disposing) {
@@ -64,7 +70,7 @@ namespace Eruru.JsonConfig {
 			if (Interlocked.Exchange (ref State, 1) != 0) {
 				return;
 			}
-			await SemaphoreSlim.WaitAsync ().ConfigureAwait (false);
+			await SemaphoreSlim.WaitAsync (Timeout).ConfigureAwait (false);
 			try {
 				InternalDispose ();
 			} finally {
@@ -88,15 +94,17 @@ namespace Eruru.JsonConfig {
 		}
 
 		public JsonConfig<TConfig, TContext> ConfigureSource (
-			IJsonConfigSource jsonConfigSource, bool isAutoReloadWhenSourceChanged = true, TimeSpan? autoReloadDebouncerTime = null
+			IJsonConfigSource jsonConfigSource, TimeSpan? saveDebouncerTime = null,
+			bool isAutoReloadWhenSourceChanged = true, TimeSpan? autoReloadDebouncerTime = null
 		) {
 			JsonConfigSource = jsonConfigSource;
+			SaveDebouncerTime = saveDebouncerTime.GetValueOrDefault (SaveDebouncerTime);
 			IsAutoReloadWhenSourceChanged = isAutoReloadWhenSourceChanged;
 			AutoReloadDebouncerTime = autoReloadDebouncerTime.GetValueOrDefault (AutoReloadDebouncerTime);
 			return this;
 		}
 
-		public JsonConfig<TConfig, TContext> ConfigureContext (TContext context) {
+		public JsonConfig<TConfig, TContext> ConfigureContext (TContext? context) {
 			Context = context;
 			return this;
 		}
@@ -148,7 +156,10 @@ namespace Eruru.JsonConfig {
 			}
 		}
 
-		public async Task<bool> TryLoadAsync (CancellationToken? cancellationToken = null) {
+		public Task<bool> TryLoadAsync (CancellationToken? cancellationToken = null) {
+			return TryLoadAsync (false, cancellationToken);
+		}
+		async Task<bool> TryLoadAsync (bool isAutoReload, CancellationToken? cancellationToken = null) {
 			CheckDisposed ();
 			CheckBuild ();
 			CancellationTokenSource? cancellationTokenSource = null;
@@ -177,7 +188,7 @@ namespace Eruru.JsonConfig {
 							if (value == null) {
 								return false;
 							}
-							jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value));
+							jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), isAutoReload);
 							return true;
 						}
 						value = await JsonSerializer.DeserializeAsync (inputStream, JsonTypeInfo!).ConfigureAwait (false);
@@ -185,7 +196,7 @@ namespace Eruru.JsonConfig {
 						if (value == null) {
 							return false;
 						}
-						jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value));
+						jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), isAutoReload);
 						return true;
 					} finally {
 						if (JsonConfigSource != null) {
@@ -234,6 +245,7 @@ namespace Eruru.JsonConfig {
 				if (outputStream == null || value == null) {
 					return false;
 				}
+				Debug.WriteLine ("序列化");
 				await JsonSerializer.SerializeAsync (outputStream, value, JsonTypeInfo!).ConfigureAwait (false);
 				isSuccess = true;
 				return true;
@@ -271,12 +283,11 @@ namespace Eruru.JsonConfig {
 			await func (this, value, state).ConfigureAwait (false);
 			return true;
 		}
-		public Task<bool> TryReadAsync<TState> (
-			Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state
-		) {
+		public Task<bool> TryReadAsync<TState> (Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state) {
 			return TryReadAsync<(TState, Action<JsonConfig<TConfig, TContext>, TConfig, TState>)> (
 				static (jsonConfig, value, state) => {
 					state.Item2 (jsonConfig, value, state.Item1);
+					return Task.CompletedTask;
 				}, (state, func)
 			);
 		}
@@ -288,6 +299,43 @@ namespace Eruru.JsonConfig {
 				state (jsonConfig, value);
 				return Task.CompletedTask;
 			}, func);
+		}
+
+		public bool TryRead<TState> (Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state) {
+#if NET
+			ArgumentNullException.ThrowIfNull (func, nameof (func));
+#else
+			if (func == null) {
+				throw new ArgumentNullException (nameof (func));
+			}
+#endif
+			CheckDisposed ();
+			CheckBuild ();
+			var value = Volatile.Read (ref Value);
+			if (value == null) {
+				return false;
+			}
+			func (this, value, state);
+			return true;
+		}
+		public bool TryRead (Action<JsonConfig<TConfig, TContext>, TConfig> func) {
+			return TryRead (static (jsonConfig, value, state) => state (jsonConfig, value), func);
+		}
+
+		public T Read<T, TState> (Func<JsonConfig<TConfig, TContext>, TConfig?, TState, T> func, TState state) {
+#if NET
+			ArgumentNullException.ThrowIfNull (func, nameof (func));
+#else
+			if (func == null) {
+				throw new ArgumentNullException (nameof (func));
+			}
+#endif
+			CheckDisposed ();
+			CheckBuild ();
+			return func (this, Volatile.Read (ref Value), state);
+		}
+		public T Read<T> (Func<JsonConfig<TConfig, TContext>, TConfig?, T> func) {
+			return Read (static (jsonConfig, value, state) => state (jsonConfig, value), func);
 		}
 
 		public async Task<bool> TryWriteAsync<TState> (
@@ -312,7 +360,6 @@ namespace Eruru.JsonConfig {
 				} else {
 					token = cancellationToken.Value;
 				}
-				JsonConfigOnChangedEventArgs<TConfig>? jsonConfigOnChangedEventArgs = null;
 				await SemaphoreSlim.WaitAsync (token).ConfigureAwait (false);
 				try {
 					CheckDisposed ();
@@ -323,13 +370,14 @@ namespace Eruru.JsonConfig {
 						return false;
 					}
 					await func (this, value, state).ConfigureAwait (false);
-					jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value));
-					return await TrySaveAsync (value, cancelAutoReload).ConfigureAwait (false);
+					_ = SaveDebouncerAsync (
+						new (value, Interlocked.Exchange (ref Value, value), false), cancelAutoReload, token
+					).ContinueWith (task => {
+						// TODO: handle exception
+					}, CancellationToken.None, TaskContinuationOptions.RunContinuationsAsynchronously, TaskScheduler.Default);
+					return true;
 				} finally {
 					SemaphoreSlim.Release ();
-					if (jsonConfigOnChangedEventArgs != null) {
-						OnChanged?.Invoke (this, jsonConfigOnChangedEventArgs);
-					}
 				}
 			} finally {
 				cancellationTokenSource?.Dispose ();
@@ -387,11 +435,56 @@ namespace Eruru.JsonConfig {
 			}, CancellationToken.None, TaskContinuationOptions.RunContinuationsAsynchronously, TaskScheduler.Default);
 		}
 
+		async Task SaveDebouncerAsync (
+			JsonConfigOnChangedEventArgs<TConfig> jsonConfigOnChangedEventArgs, bool cancelAutoReload, CancellationToken cancellationToken
+		) {
+			if (SaveDebouncerTime > TimeSpan.Zero) {
+				var cancellationTokenSource = new CancellationTokenSource ();
+				var oldCancellationTokenSource = Interlocked.Exchange (
+					ref SaveDebouncerCancellationTokenSource, cancellationTokenSource
+				);
+				if (oldCancellationTokenSource != null) {
+					await CancelCancellationTokenSourceAsync (oldCancellationTokenSource).ConfigureAwait (false);
+				}
+				try {
+					await Task.Delay (SaveDebouncerTime, cancellationTokenSource.Token).ConfigureAwait (false);
+				} catch (ObjectDisposedException) {
+					return;
+				} catch (OperationCanceledException) {
+					return;
+				}
+			}
+			await SemaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
+			try {
+				CheckDisposed ();
+				await TrySaveAsync (jsonConfigOnChangedEventArgs.Value, cancelAutoReload).ConfigureAwait (false);
+			} finally {
+				SemaphoreSlim.Release ();
+			}
+			OnChanged?.Invoke (this, jsonConfigOnChangedEventArgs);
+		}
+
 		async Task CancelAutoReloadDebouncerAsync () {
-			await Task.Delay (TimeSpan.FromTicks (AutoReloadDebouncerTime.Ticks / 2)).ConfigureAwait (false);
-			var oldCancellationTokenSource = Interlocked.CompareExchange (
-				ref AutoReloadDebouncerCancellationTokenSource, null, null
+			if (AutoReloadDebouncerTime <= TimeSpan.Zero) {
+				return;
+			}
+			var cancellationTokenSource = new CancellationTokenSource ();
+			var oldCancellationTokenSource = Interlocked.Exchange (
+				ref CancelAutoReloadDebouncerCancellationTokenSource, cancellationTokenSource
 			);
+			if (oldCancellationTokenSource != null) {
+				await CancelCancellationTokenSourceAsync (oldCancellationTokenSource).ConfigureAwait (false);
+			}
+			try {
+				await Task.Delay (
+					TimeSpan.FromTicks (AutoReloadDebouncerTime.Ticks / 2), cancellationTokenSource.Token
+				).ConfigureAwait (false);
+			} catch (ObjectDisposedException) {
+				return;
+			} catch (OperationCanceledException) {
+				return;
+			}
+			oldCancellationTokenSource = Volatile.Read (ref AutoReloadDebouncerCancellationTokenSource);
 			if (oldCancellationTokenSource == null) {
 				return;
 			}
@@ -399,24 +492,29 @@ namespace Eruru.JsonConfig {
 		}
 
 		async Task AutoReloadDebouncerAsync () {
-			var cancellationTokenSource = new CancellationTokenSource ();
-			var oldCancellationTokenSource = Interlocked.Exchange (
-				ref AutoReloadDebouncerCancellationTokenSource, cancellationTokenSource
-			);
-			if (oldCancellationTokenSource != null) {
-				await CancelCancellationTokenSourceAsync (oldCancellationTokenSource).ConfigureAwait (false);
+			if (AutoReloadDebouncerTime > TimeSpan.Zero) {
+				var cancellationTokenSource = new CancellationTokenSource ();
+				var oldCancellationTokenSource = Interlocked.Exchange (
+					ref AutoReloadDebouncerCancellationTokenSource, cancellationTokenSource
+				);
+				if (oldCancellationTokenSource != null) {
+					await CancelCancellationTokenSourceAsync (oldCancellationTokenSource).ConfigureAwait (false);
+				}
+				try {
+					await Task.Delay (AutoReloadDebouncerTime, cancellationTokenSource.Token).ConfigureAwait (false);
+				} catch (ObjectDisposedException) {
+					return;
+				} catch (OperationCanceledException) {
+					return;
+				}
 			}
-			try {
-				await Task.Delay (AutoReloadDebouncerTime, cancellationTokenSource.Token).ConfigureAwait (false);
-			} catch (ObjectDisposedException) {
-				return;
-			} catch (OperationCanceledException) {
-				return;
-			}
-			await TryLoadAsync ().ConfigureAwait (false);
+			await TryLoadAsync (true).ConfigureAwait (false);
 		}
 
 		static async Task CancelCancellationTokenSourceAsync (CancellationTokenSource cancellationTokenSource) {
+			if (cancellationTokenSource.IsCancellationRequested) {
+				return;
+			}
 #if NET
 			await cancellationTokenSource.CancelAsync ().ConfigureAwait (false);
 #else

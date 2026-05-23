@@ -62,7 +62,7 @@ namespace Eruru.JsonConfigSample {
 			await jsonConfig.TryReadAsync ((jsonConfig, value) => {
 				id = value.Id;
 			}).ConfigureAwait (false);
-			await Task.Delay (1000).ConfigureAwait (false);
+			await Task.Delay (TimeSpan.FromMilliseconds (2000)).ConfigureAwait (false);
 			// 修改内存中的配置数据，完成后会自动保存到文件
 			// Modify configuration data in memory and automatically save it to the file afterward
 			await jsonConfig.TryWriteAsync ((jsonConfig, value) => {

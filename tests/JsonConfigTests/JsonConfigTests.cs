@@ -29,7 +29,7 @@ namespace JsonConfigTests {
 				Assert.True (File.Exists (path));
 				Assert.Equal (1, context.OnChangedCounter);
 			} finally {
-				File.Delete (path);
+				await jsonConfigFileSource.DeleteAsync ();
 				Assert.False (File.Exists (path));
 			}
 			jsonConfig.OnChanged -= JsonConfig_OnChanged;
@@ -60,7 +60,7 @@ namespace JsonConfigTests {
 				Assert.True (File.Exists (path));
 				Assert.Equal (1, context.OnChangedCounter);
 			} finally {
-				File.Delete (path);
+				await jsonConfigFileSource.DeleteAsync ();
 				Assert.False (File.Exists (path));
 			}
 			jsonConfig.OnChanged -= JsonConfig_OnChanged;
@@ -92,7 +92,7 @@ namespace JsonConfigTests {
 				Assert.True (File.Exists (path));
 				Assert.Equal (3, context.OnChangedCounter);
 			} finally {
-				File.Delete (path);
+				await jsonConfigFileSource.DeleteAsync ();
 				Assert.False (File.Exists (path));
 			}
 			jsonConfig.OnChanged -= JsonConfig_OnChanged;
