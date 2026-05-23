@@ -49,6 +49,7 @@ namespace Eruru.JsonConfig {
 		}
 
 		public Task DeleteAsync () {
+			MemoryStream = null;
 			return Task.CompletedTask;
 		}
 
