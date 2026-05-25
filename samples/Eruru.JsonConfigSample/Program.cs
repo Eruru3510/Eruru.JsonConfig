@@ -73,11 +73,7 @@ namespace Eruru.JsonConfigSample {
 		}
 
 		static void JsonConfig_OnChanged (object? sender, JsonConfigOnChangedEventArgs<Config> e) {
-#pragma warning disable IDE0079 // 请删除不必要的忽略
-#pragma warning disable CA1303 // 请不要将文本作为本地化参数传递
 			Console.WriteLine ($"{DateTime.Now:O} {nameof (JsonConfig_OnChanged)}");
-#pragma warning restore CA1303 // 请不要将文本作为本地化参数传递
-#pragma warning restore IDE0079 // 请删除不必要的忽略
 			if (sender is JsonConfig<Config, Context> jsonConfig && jsonConfig.Context != null) {
 				Console.WriteLine ($"{nameof (e.OldValue)}: {JsonSerializer.Serialize (e.OldValue, jsonConfig.Context.JsonContext.Config)}");
 				Console.WriteLine ($"{nameof (e.Value)}: {JsonSerializer.Serialize (e.Value, jsonConfig.Context.JsonContext.Config)}");
