@@ -25,4 +25,8 @@
 		</None>
 	</ItemGroup>
 
+	<ItemGroup>
+		<PackageReference Include="Eruru.Debouncer" />
+	</ItemGroup>
+
 </Project>

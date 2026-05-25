@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Eruru.Debouncer;
 
 namespace Eruru.JsonConfig {
 
@@ -38,9 +39,9 @@ namespace Eruru.JsonConfig {
 		readonly SemaphoreSlim SemaphoreSlim = new (1, 1);
 		int State;
 		int BuildState;
-		CancellationTokenSource? AutoReloadDebouncerCancellationTokenSource;
-		CancellationTokenSource? CancelAutoReloadDebouncerCancellationTokenSource;
-		CancellationTokenSource? SaveDebouncerCancellationTokenSource;
+		Debouncer<JsonConfig<TConfig, TContext>, TConfig>? AutoReloadDebouncer;
+		Debouncer<JsonConfig<TConfig, TContext>, TConfig>? CancelAutoReloadDebouncer;
+		Debouncer<JsonConfig<TConfig, TContext>, (bool, CancellationToken)>? SaveDebouncer;
 
 		void InternalDispose () {
 			OnChanged = null;
@@ -48,9 +49,9 @@ namespace Eruru.JsonConfig {
 				JsonConfigSource.OnChanged -= JsonConfigSource_OnChanged;
 				JsonConfigSource.Dispose ();
 			}
-			AutoReloadDebouncerCancellationTokenSource?.Dispose ();
-			CancelAutoReloadDebouncerCancellationTokenSource?.Dispose ();
-			SaveDebouncerCancellationTokenSource?.Dispose ();
+			AutoReloadDebouncer?.Dispose ();
+			CancelAutoReloadDebouncer?.Dispose ();
+			SaveDebouncer?.Dispose ();
 		}
 
 		protected virtual void Dispose (bool disposing) {
@@ -103,6 +104,9 @@ namespace Eruru.JsonConfig {
 			OnSaved = onSaved;
 			IsAutoReloadWhenSourceChanged = isAutoReloadWhenSourceChanged;
 			AutoReloadDebouncerTime = autoReloadDebouncerTime.GetValueOrDefault (AutoReloadDebouncerTime);
+			AutoReloadDebouncer = new (AutoReloadDebouncerTime, this);
+			CancelAutoReloadDebouncer = new (new (AutoReloadDebouncerTime.Ticks / 2), this);
+			SaveDebouncer = new (SaveDebouncerTime, this);
 			return this;
 		}
 
@@ -268,9 +272,10 @@ namespace Eruru.JsonConfig {
 					}
 				}
 				if (cancelAutoReload && IsAutoReloadWhenSourceChanged && outputStream != null) {
-					_ = CancelAutoReloadDebouncerAsync ().ContinueWith (static _ => {
-						// TODO: handle exception
-					}, CancellationToken.None, TaskContinuationOptions.RunContinuationsAsynchronously, TaskScheduler.Default);
+					CancelAutoReloadDebouncer?.Post (static (debouncer, state) => {
+						debouncer.Context?.AutoReloadDebouncer?.Cancel ();
+						return Task.CompletedTask;
+					});
 				}
 			}
 		}
@@ -390,9 +395,24 @@ namespace Eruru.JsonConfig {
 					}
 					await callbackAsync (this, value, state).ConfigureAwait (false);
 					jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), false);
-					_ = SaveDebouncerAsync (cancelAutoReload, token).ContinueWith (static task => {
-						// TODO: handle exception
-					}, CancellationToken.None, TaskContinuationOptions.RunContinuationsAsynchronously, TaskScheduler.Default);
+					SaveDebouncer?.Post (static async (debouncer, state) => {
+						if (debouncer.Context == null) {
+							return;
+						}
+						var isSaved = false;
+						await debouncer.Context.SemaphoreSlim.WaitAsync (state.Item2).ConfigureAwait (false);
+						try {
+							debouncer.Context.CheckDisposed ();
+							isSaved = await debouncer.Context.TrySaveAsync (
+								debouncer.Context.Value, state.Item1
+							).ConfigureAwait (false);
+						} finally {
+							debouncer.Context.SemaphoreSlim.Release ();
+							if (isSaved) {
+								debouncer.Context.OnSaved?.Invoke (debouncer.Context);
+							}
+						}
+					}, (cancelAutoReload, token));
 					return true;
 				} finally {
 					SemaphoreSlim.Release ();
@@ -452,98 +472,12 @@ namespace Eruru.JsonConfig {
 			if (Volatile.Read (ref BuildState) == 0 || !IsAutoReloadWhenSourceChanged) {
 				return;
 			}
-			_ = AutoReloadDebouncerAsync ().ContinueWith (static _ => {
-				// TODO: handle exception
-			}, CancellationToken.None, TaskContinuationOptions.RunContinuationsAsynchronously, TaskScheduler.Default);
-		}
-
-		async Task SaveDebouncerAsync (bool cancelAutoReload, CancellationToken cancellationToken) {
-			if (SaveDebouncerTime > TimeSpan.Zero) {
-				var cancellationTokenSource = new CancellationTokenSource ();
-				var oldCancellationTokenSource = Interlocked.Exchange (
-					ref SaveDebouncerCancellationTokenSource, cancellationTokenSource
-				);
-				if (oldCancellationTokenSource != null) {
-					await CancelCancellationTokenSourceAsync (oldCancellationTokenSource).ConfigureAwait (false);
-				}
-				try {
-					await Task.Delay (SaveDebouncerTime, cancellationTokenSource.Token).ConfigureAwait (false);
-				} catch (ObjectDisposedException) {
-					return;
-				} catch (OperationCanceledException) {
+			AutoReloadDebouncer?.Post (static async (debouncer, state) => {
+				if (debouncer.Context == null) {
 					return;
 				}
-			}
-			var isSaved = false;
-			await SemaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
-			try {
-				CheckDisposed ();
-				isSaved = await TrySaveAsync (Value, cancelAutoReload).ConfigureAwait (false);
-			} finally {
-				SemaphoreSlim.Release ();
-				if (isSaved) {
-					OnSaved?.Invoke (this);
-				}
-			}
-		}
-
-		async Task CancelAutoReloadDebouncerAsync () {
-			if (AutoReloadDebouncerTime <= TimeSpan.Zero) {
-				return;
-			}
-			var cancellationTokenSource = new CancellationTokenSource ();
-			var oldCancellationTokenSource = Interlocked.Exchange (
-				ref CancelAutoReloadDebouncerCancellationTokenSource, cancellationTokenSource
-			);
-			if (oldCancellationTokenSource != null) {
-				await CancelCancellationTokenSourceAsync (oldCancellationTokenSource).ConfigureAwait (false);
-			}
-			try {
-				await Task.Delay (
-					TimeSpan.FromTicks (AutoReloadDebouncerTime.Ticks / 2), cancellationTokenSource.Token
-				).ConfigureAwait (false);
-			} catch (ObjectDisposedException) {
-				return;
-			} catch (OperationCanceledException) {
-				return;
-			}
-			oldCancellationTokenSource = Volatile.Read (ref AutoReloadDebouncerCancellationTokenSource);
-			if (oldCancellationTokenSource == null) {
-				return;
-			}
-			await CancelCancellationTokenSourceAsync (oldCancellationTokenSource).ConfigureAwait (false);
-		}
-
-		async Task AutoReloadDebouncerAsync () {
-			if (AutoReloadDebouncerTime > TimeSpan.Zero) {
-				var cancellationTokenSource = new CancellationTokenSource ();
-				var oldCancellationTokenSource = Interlocked.Exchange (
-					ref AutoReloadDebouncerCancellationTokenSource, cancellationTokenSource
-				);
-				if (oldCancellationTokenSource != null) {
-					await CancelCancellationTokenSourceAsync (oldCancellationTokenSource).ConfigureAwait (false);
-				}
-				try {
-					await Task.Delay (AutoReloadDebouncerTime, cancellationTokenSource.Token).ConfigureAwait (false);
-				} catch (ObjectDisposedException) {
-					return;
-				} catch (OperationCanceledException) {
-					return;
-				}
-			}
-			await TryLoadAsync (true).ConfigureAwait (false);
-		}
-
-		static async Task CancelCancellationTokenSourceAsync (CancellationTokenSource cancellationTokenSource) {
-			if (cancellationTokenSource.IsCancellationRequested) {
-				return;
-			}
-#if NET
-			await cancellationTokenSource.CancelAsync ().ConfigureAwait (false);
-#else
-			cancellationTokenSource.Cancel ();
-#endif
-			cancellationTokenSource.Dispose ();
+				await debouncer.Context.TryLoadAsync (true).ConfigureAwait (false);
+			});
 		}
 
 	}
