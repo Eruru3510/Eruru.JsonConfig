@@ -112,23 +112,23 @@ namespace Eruru.JsonConfig {
 		}
 
 		public JsonConfig<TConfig, TContext> Configure<TState> (
-			Action<JsonConfig<TConfig, TContext>, TState> action, TState state, TimeSpan? timeout = null
+			Action<JsonConfig<TConfig, TContext>, TState> callback, TState state, TimeSpan? timeout = null
 		) {
 #if NET
-			ArgumentNullException.ThrowIfNull (action, nameof (action));
+			ArgumentNullException.ThrowIfNull (callback, nameof (callback));
 #else
-			if (action == null) {
-				throw new ArgumentNullException (nameof (action));
+			if (callback == null) {
+				throw new ArgumentNullException (nameof (callback));
 			}
 #endif
 			Timeout = timeout.GetValueOrDefault (Timeout);
-			action (this, state);
+			callback (this, state);
 			return this;
 		}
 		public JsonConfig<TConfig, TContext> Configure (
-			Action<JsonConfig<TConfig, TContext>> action, TimeSpan? timeout = null
+			Action<JsonConfig<TConfig, TContext>> callback, TimeSpan? timeout = null
 		) {
-			return Configure (static (jsonConfig, state) => state (jsonConfig), action, timeout);
+			return Configure (static (jsonConfig, state) => state (jsonConfig), callback, timeout);
 		}
 
 		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken? cancellationToken = null) {
@@ -294,30 +294,32 @@ namespace Eruru.JsonConfig {
 			await callbackAsync (this, value, state).ConfigureAwait (false);
 			return true;
 		}
-		public Task<bool> TryReadAsync<TState> (Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state) {
+		public Task<bool> TryReadAsync<TState> (
+			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state
+		) {
 			return TryReadAsync<(TState, Action<JsonConfig<TConfig, TContext>, TConfig, TState>)> (
 				static (jsonConfig, value, state) => {
 					state.Item2 (jsonConfig, value, state.Item1);
 					return Task.CompletedTask;
-				}, (state, func)
+				}, (state, callback)
 			);
 		}
 		public Task<bool> TryReadAsync (Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync) {
 			return TryReadAsync (static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync);
 		}
-		public Task<bool> TryReadAsync (Action<JsonConfig<TConfig, TContext>, TConfig> callbackAsync) {
+		public Task<bool> TryReadAsync (Action<JsonConfig<TConfig, TContext>, TConfig> callback) {
 			return TryReadAsync (static (jsonConfig, value, state) => {
 				state (jsonConfig, value);
 				return Task.CompletedTask;
-			}, callbackAsync);
+			}, callback);
 		}
 
-		public bool TryRead<TState> (Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state) {
+		public bool TryRead<TState> (Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state) {
 #if NET
-			ArgumentNullException.ThrowIfNull (func, nameof (func));
+			ArgumentNullException.ThrowIfNull (callback, nameof (callback));
 #else
-			if (func == null) {
-				throw new ArgumentNullException (nameof (func));
+			if (callback == null) {
+				throw new ArgumentNullException (nameof (callback));
 			}
 #endif
 			CheckDisposed ();
@@ -326,27 +328,27 @@ namespace Eruru.JsonConfig {
 			if (value == null) {
 				return false;
 			}
-			func (this, value, state);
+			callback (this, value, state);
 			return true;
 		}
-		public bool TryRead (Action<JsonConfig<TConfig, TContext>, TConfig> func) {
-			return TryRead (static (jsonConfig, value, state) => state (jsonConfig, value), func);
+		public bool TryRead (Action<JsonConfig<TConfig, TContext>, TConfig> callback) {
+			return TryRead (static (jsonConfig, value, state) => state (jsonConfig, value), callback);
 		}
 
-		public T Read<T, TState> (Func<JsonConfig<TConfig, TContext>, TConfig?, TState, T> func, TState state) {
+		public T Read<T, TState> (Func<JsonConfig<TConfig, TContext>, TConfig?, TState, T> callback, TState state) {
 #if NET
-			ArgumentNullException.ThrowIfNull (func, nameof (func));
+			ArgumentNullException.ThrowIfNull (callback, nameof (callback));
 #else
-			if (func == null) {
-				throw new ArgumentNullException (nameof (func));
+			if (callback == null) {
+				throw new ArgumentNullException (nameof (callback));
 			}
 #endif
 			CheckDisposed ();
 			CheckBuild ();
-			return func (this, Volatile.Read (ref Value), state);
+			return callback (this, Volatile.Read (ref Value), state);
 		}
-		public T Read<T> (Func<JsonConfig<TConfig, TContext>, TConfig?, T> func) {
-			return Read (static (jsonConfig, value, state) => state (jsonConfig, value), func);
+		public T Read<T> (Func<JsonConfig<TConfig, TContext>, TConfig?, T> callback) {
+			return Read (static (jsonConfig, value, state) => state (jsonConfig, value), callback);
 		}
 
 		public async Task<bool> TryWriteAsync<TState> (
@@ -395,14 +397,14 @@ namespace Eruru.JsonConfig {
 			}
 		}
 		public Task<bool> TryWriteAsync<TState> (
-			Action<JsonConfig<TConfig, TContext>, TConfig, TState> func, TState state, bool cancelAutoReload = true
+			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state, bool cancelAutoReload = true
 			, CancellationToken? cancellationToken = null
 		) {
 			return TryWriteAsync<(TState, Action<JsonConfig<TConfig, TContext>, TConfig, TState>)> (
 				static (jsonConfig, value, state) => {
 					state.Item2 (jsonConfig, value, state.Item1);
 					return Task.CompletedTask;
-				}, (state, func), cancelAutoReload, cancellationToken
+				}, (state, callback), cancelAutoReload, cancellationToken
 			);
 		}
 		public Task<bool> TryWriteAsync (
@@ -415,13 +417,13 @@ namespace Eruru.JsonConfig {
 			);
 		}
 		public Task<bool> TryWriteAsync (
-			Action<JsonConfig<TConfig, TContext>, TConfig> func, bool cancelAutoReload = true,
+			Action<JsonConfig<TConfig, TContext>, TConfig> callback, bool cancelAutoReload = true,
 			CancellationToken? cancellationToken = null
 		) {
 			return TryWriteAsync (static (jsonConfig, value, state) => {
 				state (jsonConfig, value);
 				return Task.CompletedTask;
-			}, func, cancelAutoReload, cancellationToken);
+			}, callback, cancelAutoReload, cancellationToken);
 		}
 
 		void CheckDisposed () {
