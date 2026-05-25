@@ -1,4 +1,0 @@
-root = true
-
-[*.cs]
-dotnet_diagnostic.IDE0130.severity = none # 命名空间与文件夹结构不匹配
