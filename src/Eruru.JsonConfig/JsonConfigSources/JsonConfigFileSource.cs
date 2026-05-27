@@ -11,13 +11,16 @@ namespace Eruru.JsonConfig {
 		readonly FileSystemWatcher? FileSystemWatcher;
 		int State;
 
-		public JsonConfigFileSource (string path) {
+		public JsonConfigFileSource (string path, bool isEnableFileSystemWatcher = true) {
 			var fileInfo = new FileInfo (path);
 			if (fileInfo.DirectoryName == null) {
 				throw new DirectoryNotFoundException ();
 			}
 			Path = fileInfo.FullName;
 			BackupPath = $"{Path}.bak";
+			if (!isEnableFileSystemWatcher) {
+				return;
+			}
 			FileSystemWatcher = new (fileInfo.DirectoryName, $"*{fileInfo.Extension}") {
 				NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
 			};
@@ -36,7 +39,6 @@ namespace Eruru.JsonConfig {
 			FileSystemWatcher.Changed -= FileSystemWatcher_Changed;
 			FileSystemWatcher.Dispose ();
 		}
-
 		public void Dispose () {
 			Dispose (true);
 			GC.SuppressFinalize (this);
