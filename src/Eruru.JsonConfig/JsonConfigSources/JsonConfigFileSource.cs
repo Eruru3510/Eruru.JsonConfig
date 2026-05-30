@@ -50,6 +50,12 @@ namespace Eruru.JsonConfig {
 			if (!fileInfo.Exists) {
 				return Task.FromResult<Stream?> (null);
 			}
+			if (fileInfo.Length == 0) {
+				var backupFileInfo = new FileInfo (BackupPath);
+				if (backupFileInfo.Exists) {
+					backupFileInfo.CopyTo (fileInfo.FullName, true);
+				}
+			}
 			return Task.FromResult<Stream?> (fileInfo.Open (FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
 		}
 
