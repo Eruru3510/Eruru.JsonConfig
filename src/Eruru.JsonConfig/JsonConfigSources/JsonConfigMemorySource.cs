@@ -26,6 +26,7 @@ namespace Eruru.JsonConfig {
 
 		public Task<Stream?> OpenInputStreamAsync () {
 			CheckDisposed ();
+			MemoryStream?.Position = 0;
 			return Task.FromResult<Stream?> (MemoryStream);
 		}
 
@@ -35,11 +36,13 @@ namespace Eruru.JsonConfig {
 
 		public Task<Stream?> OpenOutputStreamAsync () {
 			CheckDisposed ();
-			return Task.FromResult<Stream?> (new MemoryStream ());
+			MemoryStream ??= new ();
+			MemoryStream.Position = 0;
+			MemoryStream.SetLength (0);
+			return Task.FromResult<Stream?> (MemoryStream);
 		}
 
 		public Task CloseOutputStreamAsync (Stream? stream) {
-			MemoryStream = stream as MemoryStream;
 			return Task.CompletedTask;
 		}
 
