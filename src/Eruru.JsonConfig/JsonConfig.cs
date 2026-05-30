@@ -66,6 +66,10 @@ namespace Eruru.JsonConfig {
 			}
 			SemaphoreSlim.Dispose ();
 		}
+		public void Dispose () {
+			Dispose (true);
+			GC.SuppressFinalize (this);
+		}
 
 		public async ValueTask DisposeAsync () {
 			if (Interlocked.Exchange (ref State, 1) != 0) {
@@ -78,11 +82,6 @@ namespace Eruru.JsonConfig {
 				SemaphoreSlim.Release ();
 			}
 			SemaphoreSlim.Dispose ();
-			GC.SuppressFinalize (this);
-		}
-
-		public void Dispose () {
-			Dispose (true);
 			GC.SuppressFinalize (this);
 		}
 

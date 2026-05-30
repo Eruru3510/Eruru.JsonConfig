@@ -19,7 +19,6 @@ namespace Eruru.JsonConfig {
 			}
 			OnChanged = null;
 		}
-
 		public void Dispose () {
 			Dispose (true);
 			GC.SuppressFinalize (this);
