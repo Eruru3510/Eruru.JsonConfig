@@ -10,9 +10,7 @@ namespace Eruru.JsonConfig {
 		public override DateTime Read (ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
 			switch (reader.TokenType) {
 				case JsonTokenType.String: {
-					if (!reader.TryGetDateTime (out var dateTime)) {
-						throw new InvalidCastException ();
-					}
+					var dateTime = reader.GetDateTime ();
 					switch (dateTime.Kind) {
 						case DateTimeKind.Unspecified:
 							dateTime = new (dateTime.Ticks, DateTimeKind.Local);
@@ -24,7 +22,7 @@ namespace Eruru.JsonConfig {
 					return dateTime;
 				}
 				default:
-					throw new InvalidDataException ();
+					throw new InvalidDataException ($"The expected value is a JSON string. \"{DateTime.Now:O}\"");
 			}
 		}
 

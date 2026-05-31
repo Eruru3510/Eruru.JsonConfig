@@ -140,10 +140,14 @@ namespace Eruru.JsonConfig {
 		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken cancellationToken = default) {
 			CheckDisposed ();
 			if (OnCreate == null || JsonTypeInfo == null) {
-				throw new ArgumentException ($"Need to {nameof (ConfigureValue)} first");
+				throw new ArgumentException (
+					$"You need to call the {nameof (ConfigureValue)} method to provide the {nameof (OnCreate)} and {nameof (JsonTypeInfo)}."
+				);
 			}
 			if (JsonConfigSource == null) {
-				throw new ArgumentException ($"Need to {nameof (ConfigureSource)} first");
+				throw new ArgumentException (
+					$"You need to call the {nameof (ConfigureSource)} method to provide the {nameof (JsonConfigSource)}."
+				);
 			}
 			if (Interlocked.CompareExchange (ref State, 2, 0) != 0) {
 				return this;
@@ -155,7 +159,7 @@ namespace Eruru.JsonConfig {
 			cancellationToken = cancellationTokenSource1.Token;
 			try {
 				if (!await TryLoadAsync (cancellationToken).ConfigureAwait (false)) {
-					throw new FileLoadException ("Load json file failed");
+					throw new FileLoadException ("Failed to load JSON file");
 				}
 				JsonConfigSource.OnChanged += JsonConfigSource_OnChanged;
 				return this;
@@ -447,7 +451,7 @@ namespace Eruru.JsonConfig {
 			if (Volatile.Read (ref State) > 0) {
 				return;
 			}
-			throw new ArgumentException ($"Need to {nameof (BuildAsync)}");
+			throw new ArgumentException ($"First, you need to call the {nameof (BuildAsync)} method.");
 		}
 
 		void JsonConfigSource_OnChanged (object? sender, EventArgs e) {
