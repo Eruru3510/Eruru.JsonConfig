@@ -137,7 +137,7 @@ namespace Eruru.JsonConfig {
 			return Configure (static (jsonConfig, state) => state (jsonConfig), callback, timeout);
 		}
 
-		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken? cancellationToken = null) {
+		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken cancellationToken) {
 			CheckDisposed ();
 			if (OnCreate == null || JsonTypeInfo == null) {
 				throw new ArgumentException ($"Need to {nameof (ConfigureValue)} first");
@@ -148,13 +148,12 @@ namespace Eruru.JsonConfig {
 			if (Interlocked.CompareExchange (ref State, 2, 0) != 0) {
 				return this;
 			}
-			CancellationTokenSource? cancellationTokenSource = null;
+			using var cancellationTokenSource = new CancellationTokenSource (Timeout);
+			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
+				cancellationTokenSource.Token, cancellationToken
+			);
 			try {
-				if (cancellationToken == null) {
-					cancellationTokenSource = new (Timeout);
-					cancellationToken = cancellationTokenSource.Token;
-				}
-				if (!await TryLoadAsync (cancellationToken).ConfigureAwait (false)) {
+				if (!await TryLoadAsync (cancellationTokenSource1.Token).ConfigureAwait (false)) {
 					throw new FileLoadException ("Load json file failed");
 				}
 				JsonConfigSource.OnChanged += JsonConfigSource_OnChanged;
@@ -162,107 +161,99 @@ namespace Eruru.JsonConfig {
 			} catch {
 				JsonConfigSource.OnChanged -= JsonConfigSource_OnChanged;
 				throw;
-			} finally {
-				cancellationTokenSource?.Dispose ();
 			}
 		}
+		public Task<JsonConfig<TConfig, TContext>> BuildAsync () {
+			return BuildAsync (CancellationToken.None);
+		}
 
-		public Task<bool> TryLoadAsync (CancellationToken? cancellationToken = null) {
+		public Task<bool> TryLoadAsync (CancellationToken cancellationToken) {
 			return TryLoadAsync (false, cancellationToken);
 		}
-		async Task<bool> TryLoadAsync (bool isAutoReload, CancellationToken? cancellationToken = null) {
+		public Task<bool> TryLoadAsync () {
+			return TryLoadAsync (false, CancellationToken.None);
+		}
+		async Task<bool> TryLoadAsync (bool isAutoReload, CancellationToken cancellationToken) {
 			CheckDisposed ();
 			CheckBuild ();
-			CancellationTokenSource? cancellationTokenSource = null;
+			using var cancellationTokenSource = new CancellationTokenSource (Timeout);
+			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
+				cancellationTokenSource.Token, cancellationToken
+			);
+			JsonConfigOnChangedEventArgs<TConfig>? jsonConfigOnChangedEventArgs = null;
+			var isSaved = false;
+			await SemaphoreSlim.WaitAsync (cancellationTokenSource1.Token).ConfigureAwait (false);
 			try {
-				CancellationToken token;
-				if (cancellationToken == null) {
-					cancellationTokenSource = new (Timeout);
-					token = cancellationTokenSource.Token;
-				} else {
-					token = cancellationToken.Value;
-				}
-				JsonConfigOnChangedEventArgs<TConfig>? jsonConfigOnChangedEventArgs = null;
-				var isSaved = false;
-				await SemaphoreSlim.WaitAsync (token).ConfigureAwait (false);
+				CheckDisposed ();
+				var inputStream = await JsonConfigSource!.OpenInputStreamAsync ().ConfigureAwait (false);
 				try {
-					CheckDisposed ();
-					var inputStream = JsonConfigSource == null ? null
-						: await JsonConfigSource.OpenInputStreamAsync ().ConfigureAwait (false);
-					try {
-						TConfig? value;
-						if (inputStream == null) {
-							value = Value;
-							if (value != null) {
-								isSaved = await TrySaveAsync (value, true).ConfigureAwait (false);
-								return true;
-							}
-							value = OnCreate?.Invoke (this);
-							if (value == null) {
-								return false;
-							}
-							jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), isAutoReload);
+					TConfig? value;
+					if (inputStream == null) {
+						value = Value;
+						if (value != null) {
 							isSaved = await TrySaveAsync (value, true).ConfigureAwait (false);
 							return true;
 						}
-						value = await JsonSerializer.DeserializeAsync (inputStream, JsonTypeInfo!).ConfigureAwait (false);
-						value ??= OnCreate?.Invoke (this);
+						value = OnCreate?.Invoke (this);
 						if (value == null) {
 							return false;
 						}
 						jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), isAutoReload);
+						isSaved = await TrySaveAsync (value, true).ConfigureAwait (false);
 						return true;
-					} finally {
-						if (JsonConfigSource != null) {
-							await JsonConfigSource.CloseInputStreamAsync (inputStream).ConfigureAwait (false);
-						}
 					}
+#pragma warning disable CA2016 // 将 "CancellationToken" 参数转发给方法
+					value = await JsonSerializer.DeserializeAsync (inputStream, JsonTypeInfo!).ConfigureAwait (false);
+#pragma warning restore CA2016 // 将 "CancellationToken" 参数转发给方法
+					value ??= OnCreate?.Invoke (this);
+					if (value == null) {
+						return false;
+					}
+					jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), isAutoReload);
+					return true;
 				} finally {
-					SemaphoreSlim.Release ();
-					if (jsonConfigOnChangedEventArgs != null) {
-						OnChanged?.Invoke (this, jsonConfigOnChangedEventArgs);
-					}
-					if (isSaved) {
-						OnSaved?.Invoke (this);
-					}
+					await JsonConfigSource.CloseInputStreamAsync (inputStream).ConfigureAwait (false);
 				}
 			} finally {
-				cancellationTokenSource?.Dispose ();
+				SemaphoreSlim.Release ();
+				if (jsonConfigOnChangedEventArgs != null) {
+					OnChanged?.Invoke (this, jsonConfigOnChangedEventArgs);
+				}
+				if (isSaved) {
+					OnSaved?.Invoke (this);
+				}
 			}
 		}
 
-		public async Task<bool> TrySaveAsync (bool cancelAutoReload = true, CancellationToken? cancellationToken = null) {
+		public async Task<bool> TrySaveAsync (bool cancelAutoReload, CancellationToken cancellationToken) {
 			CheckDisposed ();
 			CheckBuild ();
-			CancellationTokenSource? cancellationTokenSource = null;
+			using var cancellationTokenSource = new CancellationTokenSource (Timeout);
+			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
+				cancellationTokenSource.Token, cancellationToken
+			);
+			var isSaved = false;
+			await SemaphoreSlim.WaitAsync (cancellationTokenSource1.Token).ConfigureAwait (false);
 			try {
-				CancellationToken token;
-				if (cancellationToken == null) {
-					cancellationTokenSource = new (Timeout);
-					token = cancellationTokenSource.Token;
-				} else {
-					token = cancellationToken.Value;
-				}
-				var isSaved = false;
-				await SemaphoreSlim.WaitAsync (token).ConfigureAwait (false);
-				try {
-					CheckDisposed ();
-					isSaved = await TrySaveAsync (Value, cancelAutoReload).ConfigureAwait (false);
-					return isSaved;
-				} finally {
-					SemaphoreSlim.Release ();
-					if (isSaved) {
-						OnSaved?.Invoke (this);
-					}
-				}
+				CheckDisposed ();
+				isSaved = await TrySaveAsync (Value, cancelAutoReload).ConfigureAwait (false);
+				return isSaved;
 			} finally {
-				cancellationTokenSource?.Dispose ();
+				SemaphoreSlim.Release ();
+				if (isSaved) {
+					OnSaved?.Invoke (this);
+				}
 			}
+		}
+		public Task<bool> TrySaveAsync (CancellationToken cancellationToken) {
+			return TrySaveAsync (true, cancellationToken);
+		}
+		public Task<bool> TrySaveAsync (bool cancelAutoReload = true) {
+			return TrySaveAsync (cancelAutoReload, CancellationToken.None);
 		}
 		async Task<bool> TrySaveAsync (TConfig? value, bool cancelAutoReload) {
 			var isSuccess = false;
-			var outputStream = JsonConfigSource == null ? null
-				: await JsonConfigSource.OpenOutputStreamAsync ().ConfigureAwait (false);
+			var outputStream = await JsonConfigSource!.OpenOutputStreamAsync ().ConfigureAwait (false);
 			try {
 				if (outputStream == null || value == null) {
 					return false;
@@ -271,11 +262,9 @@ namespace Eruru.JsonConfig {
 				isSuccess = true;
 				return true;
 			} finally {
-				if (JsonConfigSource != null) {
-					await JsonConfigSource.CloseOutputStreamAsync (outputStream).ConfigureAwait (false);
-					if (isSuccess) {
-						await JsonConfigSource.BackupAsync ().ConfigureAwait (false);
-					}
+				await JsonConfigSource.CloseOutputStreamAsync (outputStream).ConfigureAwait (false);
+				if (isSuccess) {
+					await JsonConfigSource.BackupAsync ().ConfigureAwait (false);
 				}
 				if (cancelAutoReload && IsAutoReloadWhenSourceChanged && outputStream != null) {
 					CancelAutoReloadDebouncer?.Post (static (debouncer, state) => {
@@ -368,8 +357,8 @@ namespace Eruru.JsonConfig {
 		}
 
 		public async Task<bool> TryWriteAsync<TState> (
-			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state
-			, bool cancelAutoReload = true, CancellationToken? cancellationToken = null
+			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state,
+			bool cancelAutoReload, CancellationToken cancellationToken
 		) {
 			CheckDisposed ();
 			CheckBuild ();
@@ -380,84 +369,138 @@ namespace Eruru.JsonConfig {
 				throw new ArgumentNullException (nameof (callbackAsync));
 			}
 #endif
-			CancellationTokenSource? cancellationTokenSource = null;
+			using var cancellationTokenSource = new CancellationTokenSource (Timeout);
+			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
+				cancellationTokenSource.Token, cancellationToken
+			);
+			JsonConfigOnChangedEventArgs<TConfig>? jsonConfigOnChangedEventArgs = null;
+			await SemaphoreSlim.WaitAsync (cancellationTokenSource1.Token).ConfigureAwait (false);
 			try {
-				CancellationToken token;
-				if (cancellationToken == null) {
-					cancellationTokenSource = new (Timeout);
-					token = cancellationTokenSource.Token;
-				} else {
-					token = cancellationToken.Value;
+				CheckDisposed ();
+				var value = Value;
+				using var jsonDocument = JsonSerializer.SerializeToDocument (value, JsonTypeInfo!);
+				value = jsonDocument.Deserialize (JsonTypeInfo!);
+				if (value == null) {
+					return false;
 				}
-				JsonConfigOnChangedEventArgs<TConfig>? jsonConfigOnChangedEventArgs = null;
-				await SemaphoreSlim.WaitAsync (token).ConfigureAwait (false);
-				try {
-					CheckDisposed ();
-					var value = Value;
-					using var jsonDocument = JsonSerializer.SerializeToDocument (value, JsonTypeInfo!);
-					value = jsonDocument.Deserialize (JsonTypeInfo!);
-					if (value == null) {
-						return false;
+				await callbackAsync (this, value, state).ConfigureAwait (false);
+				jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), false);
+				SaveDebouncer?.Post (static async (debouncer, state) => {
+					if (debouncer.Context == null) {
+						return;
 					}
-					await callbackAsync (this, value, state).ConfigureAwait (false);
-					jsonConfigOnChangedEventArgs = new (value, Interlocked.Exchange (ref Value, value), false);
-					SaveDebouncer?.Post (static async (debouncer, state) => {
-						if (debouncer.Context == null) {
-							return;
+					using var cancellationTokenSource = new CancellationTokenSource (debouncer.Context.Timeout);
+					using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
+						cancellationTokenSource.Token, state.Item2
+					);
+					var isSaved = false;
+					await debouncer.Context.SemaphoreSlim.WaitAsync (cancellationTokenSource1.Token).ConfigureAwait (false);
+					try {
+						debouncer.Context.CheckDisposed ();
+						isSaved = await debouncer.Context.TrySaveAsync (
+							debouncer.Context.Value, state.Item1
+						).ConfigureAwait (false);
+					} finally {
+						debouncer.Context.SemaphoreSlim.Release ();
+						if (isSaved) {
+							debouncer.Context.OnSaved?.Invoke (debouncer.Context);
 						}
-						var isSaved = false;
-						await debouncer.Context.SemaphoreSlim.WaitAsync (state.Item2).ConfigureAwait (false);
-						try {
-							debouncer.Context.CheckDisposed ();
-							isSaved = await debouncer.Context.TrySaveAsync (
-								debouncer.Context.Value, state.Item1
-							).ConfigureAwait (false);
-						} finally {
-							debouncer.Context.SemaphoreSlim.Release ();
-							if (isSaved) {
-								debouncer.Context.OnSaved?.Invoke (debouncer.Context);
-							}
-						}
-					}, (cancelAutoReload, token));
-					return true;
-				} finally {
-					SemaphoreSlim.Release ();
-					if (jsonConfigOnChangedEventArgs != null) {
-						OnChanged?.Invoke (this, jsonConfigOnChangedEventArgs);
 					}
-				}
+				}, (cancelAutoReload, cancellationToken));
+				return true;
 			} finally {
-				cancellationTokenSource?.Dispose ();
+				SemaphoreSlim.Release ();
+				if (jsonConfigOnChangedEventArgs != null) {
+					OnChanged?.Invoke (this, jsonConfigOnChangedEventArgs);
+				}
 			}
 		}
 		public Task<bool> TryWriteAsync<TState> (
-			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state, bool cancelAutoReload = true
-			, CancellationToken? cancellationToken = null
+			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state,
+			CancellationToken cancellationToken
 		) {
-			return TryWriteAsync<(TState, Action<JsonConfig<TConfig, TContext>, TConfig, TState>)> (
-				static (jsonConfig, value, state) => {
-					state.Item2 (jsonConfig, value, state.Item1);
-					return Task.CompletedTask;
-				}, (state, callback), cancelAutoReload, cancellationToken
-			);
+			return TryWriteAsync (callbackAsync, state, true, cancellationToken);
 		}
 		public Task<bool> TryWriteAsync (
-			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, bool cancelAutoReload = true,
-			CancellationToken? cancellationToken = null
+			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, bool cancelAutoReload,
+			CancellationToken cancellationToken
 		) {
 			return TryWriteAsync (
-				static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync,
-				cancelAutoReload, cancellationToken
+				static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync, cancelAutoReload,
+				cancellationToken
 			);
 		}
 		public Task<bool> TryWriteAsync (
-			Action<JsonConfig<TConfig, TContext>, TConfig> callback, bool cancelAutoReload = true,
-			CancellationToken? cancellationToken = null
+			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, CancellationToken cancellationToken
+		) {
+			return TryWriteAsync (
+				static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync, true, cancellationToken
+			);
+		}
+		public Task<bool> TryWriteAsync<TState> (
+			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state,
+			bool cancelAutoReload = true
+		) {
+			return TryWriteAsync (callbackAsync, state, cancelAutoReload, CancellationToken.None);
+		}
+		public Task<bool> TryWriteAsync (
+			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, bool cancelAutoReload = true
+		) {
+			return TryWriteAsync (
+				static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync, cancelAutoReload,
+				CancellationToken.None
+			);
+		}
+		public Task<bool> TryWriteAsync<TState> (
+			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state, bool cancelAutoReload,
+			CancellationToken cancellationToken
+		) {
+			return TryWriteAsync (static (jsonConfig, value, state) => {
+				state.callback (jsonConfig, value, state.state);
+				return Task.CompletedTask;
+			}, (state, callback), cancelAutoReload, cancellationToken);
+		}
+		public Task<bool> TryWriteAsync<TState> (
+			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state,
+			CancellationToken cancellationToken
+		) {
+			return TryWriteAsync (static (jsonConfig, value, state) => {
+				state.callback (jsonConfig, value, state.state);
+				return Task.CompletedTask;
+			}, (state, callback), true, cancellationToken);
+		}
+		public Task<bool> TryWriteAsync (
+			Action<JsonConfig<TConfig, TContext>, TConfig> callback, bool cancelAutoReload,
+			CancellationToken cancellationToken
 		) {
 			return TryWriteAsync (static (jsonConfig, value, state) => {
 				state (jsonConfig, value);
 				return Task.CompletedTask;
 			}, callback, cancelAutoReload, cancellationToken);
+		}
+		public Task<bool> TryWriteAsync (
+			Action<JsonConfig<TConfig, TContext>, TConfig> callback, CancellationToken cancellationToken
+		) {
+			return TryWriteAsync (static (jsonConfig, value, state) => {
+				state (jsonConfig, value);
+				return Task.CompletedTask;
+			}, callback, true, cancellationToken);
+		}
+		public Task<bool> TryWriteAsync<TState> (
+			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state, bool cancelAutoReload = true
+		) {
+			return TryWriteAsync (static (jsonConfig, value, state) => {
+				state.callback (jsonConfig, value, state.state);
+				return Task.CompletedTask;
+			}, (state, callback), cancelAutoReload, CancellationToken.None);
+		}
+		public Task<bool> TryWriteAsync (
+			Action<JsonConfig<TConfig, TContext>, TConfig> callback, bool cancelAutoReload = true
+		) {
+			return TryWriteAsync (static (jsonConfig, value, state) => {
+				state (jsonConfig, value);
+				return Task.CompletedTask;
+			}, callback, cancelAutoReload, CancellationToken.None);
 		}
 
 		void CheckDisposed () {
@@ -482,7 +525,7 @@ namespace Eruru.JsonConfig {
 				if (debouncer.Context == null) {
 					return;
 				}
-				await debouncer.Context.TryLoadAsync (true).ConfigureAwait (false);
+				await debouncer.Context.TryLoadAsync (true, CancellationToken.None).ConfigureAwait (false);
 			});
 		}
 
