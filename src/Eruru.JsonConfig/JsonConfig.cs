@@ -152,8 +152,9 @@ namespace Eruru.JsonConfig {
 			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
 				cancellationTokenSource.Token, cancellationToken
 			);
+			cancellationToken = cancellationTokenSource1.Token;
 			try {
-				if (!await TryLoadAsync (cancellationTokenSource1.Token).ConfigureAwait (false)) {
+				if (!await TryLoadAsync (cancellationToken).ConfigureAwait (false)) {
 					throw new FileLoadException ("Load json file failed");
 				}
 				JsonConfigSource.OnChanged += JsonConfigSource_OnChanged;
@@ -180,9 +181,10 @@ namespace Eruru.JsonConfig {
 			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
 				cancellationTokenSource.Token, cancellationToken
 			);
+			cancellationToken = cancellationTokenSource1.Token;
 			JsonConfigOnChangedEventArgs<TConfig>? jsonConfigOnChangedEventArgs = null;
 			var isSaved = false;
-			await SemaphoreSlim.WaitAsync (cancellationTokenSource1.Token).ConfigureAwait (false);
+			await SemaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 			try {
 				CheckDisposed ();
 				var inputStream = await JsonConfigSource!.OpenInputStreamAsync ().ConfigureAwait (false);
@@ -232,8 +234,9 @@ namespace Eruru.JsonConfig {
 			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
 				cancellationTokenSource.Token, cancellationToken
 			);
+			cancellationToken = cancellationTokenSource1.Token;
 			var isSaved = false;
-			await SemaphoreSlim.WaitAsync (cancellationTokenSource1.Token).ConfigureAwait (false);
+			await SemaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 			try {
 				CheckDisposed ();
 				isSaved = await TrySaveAsync (Value, cancelAutoReload).ConfigureAwait (false);
@@ -373,8 +376,9 @@ namespace Eruru.JsonConfig {
 			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
 				cancellationTokenSource.Token, cancellationToken
 			);
+			cancellationToken = cancellationTokenSource1.Token;
 			JsonConfigOnChangedEventArgs<TConfig>? jsonConfigOnChangedEventArgs = null;
-			await SemaphoreSlim.WaitAsync (cancellationTokenSource1.Token).ConfigureAwait (false);
+			await SemaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 			try {
 				CheckDisposed ();
 				var value = Value;
@@ -393,8 +397,9 @@ namespace Eruru.JsonConfig {
 					using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
 						cancellationTokenSource.Token, state.Item2
 					);
+					var cancellationToken = cancellationTokenSource1.Token;
 					var isSaved = false;
-					await debouncer.Context.SemaphoreSlim.WaitAsync (cancellationTokenSource1.Token).ConfigureAwait (false);
+					await debouncer.Context.SemaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 					try {
 						debouncer.Context.CheckDisposed ();
 						isSaved = await debouncer.Context.TrySaveAsync (
