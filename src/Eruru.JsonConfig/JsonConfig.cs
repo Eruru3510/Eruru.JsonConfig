@@ -137,7 +137,7 @@ namespace Eruru.JsonConfig {
 			return Configure (static (jsonConfig, state) => state (jsonConfig), callback, timeout);
 		}
 
-		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken cancellationToken) {
+		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken cancellationToken = default) {
 			CheckDisposed ();
 			if (OnCreate == null || JsonTypeInfo == null) {
 				throw new ArgumentException ($"Need to {nameof (ConfigureValue)} first");
@@ -164,15 +164,9 @@ namespace Eruru.JsonConfig {
 				throw;
 			}
 		}
-		public Task<JsonConfig<TConfig, TContext>> BuildAsync () {
-			return BuildAsync (CancellationToken.None);
-		}
 
-		public Task<bool> TryLoadAsync (CancellationToken cancellationToken) {
+		public Task<bool> TryLoadAsync (CancellationToken cancellationToken = default) {
 			return TryLoadAsync (false, cancellationToken);
-		}
-		public Task<bool> TryLoadAsync () {
-			return TryLoadAsync (false, CancellationToken.None);
 		}
 		async Task<bool> TryLoadAsync (bool isAutoReload, CancellationToken cancellationToken) {
 			CheckDisposed ();
@@ -227,7 +221,7 @@ namespace Eruru.JsonConfig {
 			}
 		}
 
-		public async Task<bool> TrySaveAsync (bool cancelAutoReload, CancellationToken cancellationToken) {
+		public async Task<bool> TrySaveAsync (bool cancelAutoReload = true, CancellationToken cancellationToken = default) {
 			CheckDisposed ();
 			CheckBuild ();
 			using var cancellationTokenSource = new CancellationTokenSource (Timeout);
@@ -247,12 +241,6 @@ namespace Eruru.JsonConfig {
 					OnSaved?.Invoke (this);
 				}
 			}
-		}
-		public Task<bool> TrySaveAsync (CancellationToken cancellationToken) {
-			return TrySaveAsync (true, cancellationToken);
-		}
-		public Task<bool> TrySaveAsync (bool cancelAutoReload = true) {
-			return TrySaveAsync (cancelAutoReload, CancellationToken.None);
 		}
 		async Task<bool> TrySaveAsync (TConfig? value, bool cancelAutoReload) {
 			var isSuccess = false;
@@ -361,7 +349,7 @@ namespace Eruru.JsonConfig {
 
 		public async Task<bool> TryWriteAsync<TState> (
 			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state,
-			bool cancelAutoReload, CancellationToken cancellationToken
+			bool cancelAutoReload = true, CancellationToken cancellationToken = default
 		) {
 			CheckDisposed ();
 			CheckBuild ();
@@ -420,92 +408,32 @@ namespace Eruru.JsonConfig {
 				}
 			}
 		}
-		public Task<bool> TryWriteAsync<TState> (
-			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state,
-			CancellationToken cancellationToken
-		) {
-			return TryWriteAsync (callbackAsync, state, true, cancellationToken);
-		}
 		public Task<bool> TryWriteAsync (
-			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, bool cancelAutoReload,
-			CancellationToken cancellationToken
+			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, bool cancelAutoReload = true,
+			CancellationToken cancellationToken = default
 		) {
 			return TryWriteAsync (
 				static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync, cancelAutoReload,
 				cancellationToken
 			);
 		}
-		public Task<bool> TryWriteAsync (
-			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, CancellationToken cancellationToken
-		) {
-			return TryWriteAsync (
-				static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync, true, cancellationToken
-			);
-		}
 		public Task<bool> TryWriteAsync<TState> (
-			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state,
-			bool cancelAutoReload = true
-		) {
-			return TryWriteAsync (callbackAsync, state, cancelAutoReload, CancellationToken.None);
-		}
-		public Task<bool> TryWriteAsync (
-			Func<JsonConfig<TConfig, TContext>, TConfig, Task> callbackAsync, bool cancelAutoReload = true
-		) {
-			return TryWriteAsync (
-				static (jsonConfig, value, state) => state (jsonConfig, value), callbackAsync, cancelAutoReload,
-				CancellationToken.None
-			);
-		}
-		public Task<bool> TryWriteAsync<TState> (
-			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state, bool cancelAutoReload,
-			CancellationToken cancellationToken
+			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state, bool cancelAutoReload = true,
+			CancellationToken cancellationToken = default
 		) {
 			return TryWriteAsync (static (jsonConfig, value, state) => {
 				state.callback (jsonConfig, value, state.state);
 				return Task.CompletedTask;
 			}, (state, callback), cancelAutoReload, cancellationToken);
 		}
-		public Task<bool> TryWriteAsync<TState> (
-			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state,
-			CancellationToken cancellationToken
-		) {
-			return TryWriteAsync (static (jsonConfig, value, state) => {
-				state.callback (jsonConfig, value, state.state);
-				return Task.CompletedTask;
-			}, (state, callback), true, cancellationToken);
-		}
 		public Task<bool> TryWriteAsync (
-			Action<JsonConfig<TConfig, TContext>, TConfig> callback, bool cancelAutoReload,
-			CancellationToken cancellationToken
+			Action<JsonConfig<TConfig, TContext>, TConfig> callback, bool cancelAutoReload = true,
+			CancellationToken cancellationToken = default
 		) {
 			return TryWriteAsync (static (jsonConfig, value, state) => {
 				state (jsonConfig, value);
 				return Task.CompletedTask;
 			}, callback, cancelAutoReload, cancellationToken);
-		}
-		public Task<bool> TryWriteAsync (
-			Action<JsonConfig<TConfig, TContext>, TConfig> callback, CancellationToken cancellationToken
-		) {
-			return TryWriteAsync (static (jsonConfig, value, state) => {
-				state (jsonConfig, value);
-				return Task.CompletedTask;
-			}, callback, true, cancellationToken);
-		}
-		public Task<bool> TryWriteAsync<TState> (
-			Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state, bool cancelAutoReload = true
-		) {
-			return TryWriteAsync (static (jsonConfig, value, state) => {
-				state.callback (jsonConfig, value, state.state);
-				return Task.CompletedTask;
-			}, (state, callback), cancelAutoReload, CancellationToken.None);
-		}
-		public Task<bool> TryWriteAsync (
-			Action<JsonConfig<TConfig, TContext>, TConfig> callback, bool cancelAutoReload = true
-		) {
-			return TryWriteAsync (static (jsonConfig, value, state) => {
-				state (jsonConfig, value);
-				return Task.CompletedTask;
-			}, callback, cancelAutoReload, CancellationToken.None);
 		}
 
 		void CheckDisposed () {
