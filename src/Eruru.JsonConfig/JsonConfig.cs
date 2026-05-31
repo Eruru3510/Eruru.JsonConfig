@@ -38,7 +38,6 @@ namespace Eruru.JsonConfig {
 		TimeSpan AutoReloadDebouncerTime = TimeSpan.FromMilliseconds (500);
 		readonly SemaphoreSlim SemaphoreSlim = new (1, 1);
 		int State;
-		int BuildState;
 		Debouncer<JsonConfig<TConfig, TContext>, TConfig>? AutoReloadDebouncer;
 		Debouncer<JsonConfig<TConfig, TContext>, TConfig>? CancelAutoReloadDebouncer;
 		Debouncer<JsonConfig<TConfig, TContext>, (bool, CancellationToken)>? SaveDebouncer;
@@ -55,7 +54,7 @@ namespace Eruru.JsonConfig {
 		}
 
 		protected virtual void Dispose (bool disposing) {
-			if (Interlocked.Exchange (ref State, 1) != 0 || !disposing) {
+			if (Interlocked.Exchange (ref State, 1) == 1 || !disposing) {
 				return;
 			}
 			SemaphoreSlim.Wait ();
@@ -72,7 +71,7 @@ namespace Eruru.JsonConfig {
 		}
 
 		public async ValueTask DisposeAsync () {
-			if (Interlocked.Exchange (ref State, 1) != 0) {
+			if (Interlocked.Exchange (ref State, 1) == 1) {
 				return;
 			}
 			await SemaphoreSlim.WaitAsync (Timeout).ConfigureAwait (false);
@@ -88,6 +87,7 @@ namespace Eruru.JsonConfig {
 		public JsonConfig<TConfig, TContext> ConfigureValue (
 			Func<JsonConfig<TConfig, TContext>, TConfig> onCreate, JsonTypeInfo<TConfig> jsonTypeInfo
 		) {
+			CheckDisposed ();
 			OnCreate = onCreate;
 			JsonTypeInfo = jsonTypeInfo;
 			return this;
@@ -98,6 +98,7 @@ namespace Eruru.JsonConfig {
 			TimeSpan? saveDebouncerTime = null, Action<JsonConfig<TConfig, TContext>>? onSaved = null,
 			bool isAutoReloadWhenSourceChanged = true, TimeSpan? autoReloadDebouncerTime = null
 		) {
+			CheckDisposed ();
 			JsonConfigSource = jsonConfigSource;
 			SaveDebouncerTime = saveDebouncerTime.GetValueOrDefault (SaveDebouncerTime);
 			OnSaved = onSaved;
@@ -110,6 +111,7 @@ namespace Eruru.JsonConfig {
 		}
 
 		public JsonConfig<TConfig, TContext> ConfigureContext (TContext? context) {
+			CheckDisposed ();
 			Context = context;
 			return this;
 		}
@@ -117,6 +119,7 @@ namespace Eruru.JsonConfig {
 		public JsonConfig<TConfig, TContext> Configure<TState> (
 			Action<JsonConfig<TConfig, TContext>, TState> callback, TState state, TimeSpan? timeout = null
 		) {
+			CheckDisposed ();
 #if NET
 			ArgumentNullException.ThrowIfNull (callback, nameof (callback));
 #else
@@ -135,13 +138,14 @@ namespace Eruru.JsonConfig {
 		}
 
 		public async Task<JsonConfig<TConfig, TContext>> BuildAsync (CancellationToken? cancellationToken = null) {
+			CheckDisposed ();
 			if (OnCreate == null || JsonTypeInfo == null) {
 				throw new ArgumentException ($"Need to {nameof (ConfigureValue)} first");
 			}
 			if (JsonConfigSource == null) {
 				throw new ArgumentException ($"Need to {nameof (ConfigureSource)} first");
 			}
-			if (Interlocked.Exchange (ref BuildState, 1) != 0) {
+			if (Interlocked.CompareExchange (ref State, 2, 0) != 0) {
 				return this;
 			}
 			CancellationTokenSource? cancellationTokenSource = null;
@@ -155,6 +159,9 @@ namespace Eruru.JsonConfig {
 				}
 				JsonConfigSource.OnChanged += JsonConfigSource_OnChanged;
 				return this;
+			} catch {
+				JsonConfigSource.OnChanged -= JsonConfigSource_OnChanged;
+				throw;
 			} finally {
 				cancellationTokenSource?.Dispose ();
 			}
@@ -282,6 +289,8 @@ namespace Eruru.JsonConfig {
 		public async Task<bool> TryReadAsync<TState> (
 			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state
 		) {
+			CheckDisposed ();
+			CheckBuild ();
 #if NET
 			ArgumentNullException.ThrowIfNull (callbackAsync, nameof (callbackAsync));
 #else
@@ -289,8 +298,6 @@ namespace Eruru.JsonConfig {
 				throw new ArgumentNullException (nameof (callbackAsync));
 			}
 #endif
-			CheckDisposed ();
-			CheckBuild ();
 			var value = Volatile.Read (ref Value);
 			if (value == null) {
 				return false;
@@ -319,6 +326,8 @@ namespace Eruru.JsonConfig {
 		}
 
 		public bool TryRead<TState> (Action<JsonConfig<TConfig, TContext>, TConfig, TState> callback, TState state) {
+			CheckDisposed ();
+			CheckBuild ();
 #if NET
 			ArgumentNullException.ThrowIfNull (callback, nameof (callback));
 #else
@@ -326,8 +335,6 @@ namespace Eruru.JsonConfig {
 				throw new ArgumentNullException (nameof (callback));
 			}
 #endif
-			CheckDisposed ();
-			CheckBuild ();
 			var value = Volatile.Read (ref Value);
 			if (value == null) {
 				return false;
@@ -340,6 +347,8 @@ namespace Eruru.JsonConfig {
 		}
 
 		public T Read<T, TState> (Func<JsonConfig<TConfig, TContext>, TConfig?, TState, T> callback, TState state) {
+			CheckDisposed ();
+			CheckBuild ();
 #if NET
 			ArgumentNullException.ThrowIfNull (callback, nameof (callback));
 #else
@@ -347,8 +356,6 @@ namespace Eruru.JsonConfig {
 				throw new ArgumentNullException (nameof (callback));
 			}
 #endif
-			CheckDisposed ();
-			CheckBuild ();
 			return callback (this, Volatile.Read (ref Value), state);
 		}
 		public T Read<T> (Func<JsonConfig<TConfig, TContext>, TConfig?, T> callback) {
@@ -364,6 +371,8 @@ namespace Eruru.JsonConfig {
 			Func<JsonConfig<TConfig, TContext>, TConfig, TState, Task> callbackAsync, TState state
 			, bool cancelAutoReload = true, CancellationToken? cancellationToken = null
 		) {
+			CheckDisposed ();
+			CheckBuild ();
 #if NET
 			ArgumentNullException.ThrowIfNull (callbackAsync, nameof (callbackAsync));
 #else
@@ -371,8 +380,6 @@ namespace Eruru.JsonConfig {
 				throw new ArgumentNullException (nameof (callbackAsync));
 			}
 #endif
-			CheckDisposed ();
-			CheckBuild ();
 			CancellationTokenSource? cancellationTokenSource = null;
 			try {
 				CancellationToken token;
@@ -454,21 +461,21 @@ namespace Eruru.JsonConfig {
 		}
 
 		void CheckDisposed () {
-			if (Volatile.Read (ref State) == 0) {
+			if (Volatile.Read (ref State) != 1) {
 				return;
 			}
 			throw new ObjectDisposedException (nameof (JsonConfig<,>));
 		}
 
 		void CheckBuild () {
-			if (Volatile.Read (ref BuildState) != 0) {
+			if (Volatile.Read (ref State) > 0) {
 				return;
 			}
 			throw new ArgumentException ($"Need to {nameof (BuildAsync)}");
 		}
 
 		void JsonConfigSource_OnChanged (object? sender, EventArgs e) {
-			if (Volatile.Read (ref BuildState) == 0 || !IsAutoReloadWhenSourceChanged) {
+			if (Volatile.Read (ref State) < 2 || !IsAutoReloadWhenSourceChanged) {
 				return;
 			}
 			AutoReloadDebouncer?.Post (static async (debouncer, state) => {
