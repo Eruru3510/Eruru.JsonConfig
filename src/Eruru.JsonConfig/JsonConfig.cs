@@ -175,6 +175,9 @@ namespace Eruru.JsonConfig {
 		async Task<bool> TryLoadAsync (bool isAutoReload, CancellationToken cancellationToken) {
 			CheckDisposed ();
 			CheckBuild ();
+			if (JsonConfigSource == null || JsonTypeInfo == null) {
+				return false;
+			}
 			using var cancellationTokenSource = new CancellationTokenSource (Timeout);
 			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
 				cancellationTokenSource.Token, cancellationToken
@@ -185,7 +188,7 @@ namespace Eruru.JsonConfig {
 			await SemaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 			try {
 				CheckDisposed ();
-				var inputStream = await JsonConfigSource!.OpenInputStreamAsync ().ConfigureAwait (false);
+				var inputStream = await JsonConfigSource.OpenInputStreamAsync ().ConfigureAwait (false);
 				try {
 					TConfig? value;
 					if (inputStream == null) {
@@ -203,7 +206,7 @@ namespace Eruru.JsonConfig {
 						return true;
 					}
 #pragma warning disable CA2016 // 将 "CancellationToken" 参数转发给方法
-					value = await JsonSerializer.DeserializeAsync (inputStream, JsonTypeInfo!).ConfigureAwait (false);
+					value = await JsonSerializer.DeserializeAsync (inputStream, JsonTypeInfo).ConfigureAwait (false);
 #pragma warning restore CA2016 // 将 "CancellationToken" 参数转发给方法
 					value ??= OnCreate?.Invoke (this);
 					if (value == null) {
@@ -247,13 +250,16 @@ namespace Eruru.JsonConfig {
 			}
 		}
 		async Task<bool> TrySaveAsync (TConfig? value, bool cancelAutoReload) {
+			if (JsonConfigSource == null || JsonTypeInfo == null) {
+				return false;
+			}
 			var isSuccess = false;
-			var outputStream = await JsonConfigSource!.OpenOutputStreamAsync ().ConfigureAwait (false);
+			var outputStream = await JsonConfigSource.OpenOutputStreamAsync ().ConfigureAwait (false);
 			try {
 				if (outputStream == null || value == null) {
 					return false;
 				}
-				await JsonSerializer.SerializeAsync (outputStream, value, JsonTypeInfo!).ConfigureAwait (false);
+				await JsonSerializer.SerializeAsync (outputStream, value, JsonTypeInfo).ConfigureAwait (false);
 				isSuccess = true;
 				return true;
 			} finally {
@@ -364,6 +370,9 @@ namespace Eruru.JsonConfig {
 				throw new ArgumentNullException (nameof (callbackAsync));
 			}
 #endif
+			if (JsonTypeInfo == null) {
+				return false;
+			}
 			using var cancellationTokenSource = new CancellationTokenSource (Timeout);
 			using var cancellationTokenSource1 = CancellationTokenSource.CreateLinkedTokenSource (
 				cancellationTokenSource.Token, cancellationToken
@@ -374,8 +383,11 @@ namespace Eruru.JsonConfig {
 			try {
 				CheckDisposed ();
 				var value = Value;
-				using var jsonDocument = JsonSerializer.SerializeToDocument (value, JsonTypeInfo!);
-				value = jsonDocument.Deserialize (JsonTypeInfo!);
+				if (value == null) {
+					return false;
+				}
+				using var jsonDocument = JsonSerializer.SerializeToDocument (value, JsonTypeInfo);
+				value = jsonDocument.Deserialize (JsonTypeInfo);
 				if (value == null) {
 					return false;
 				}
